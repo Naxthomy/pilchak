@@ -1,4 +1,10 @@
-# Proyecto Base - PDISC 7° Año 4° División
+# Pilchak - PDISC 7° Año 4° División
+
+Alumnos:
+Morel Marcos
+Gimenez Thomas
+Luca Madrid
+ian Iriarte
 
 Este es un proyecto base en PHP pensado para que los alumnos trabajen con una aplicación simple de autenticación. Incluye:
 
