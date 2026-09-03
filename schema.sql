@@ -1,6 +1,6 @@
-CREATE DATABASE pdi_base;
+CREATE DATABASE pilchak;
 
-USE pdi_base;
+USE pilchak;
 
 CREATE TABLE IF NOT EXISTS users (
     id         CHAR(36)     NOT NULL DEFAULT (UUID()),
