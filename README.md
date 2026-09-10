@@ -1,6 +1,6 @@
 # Pilchak - PDISC 7° Año 4° División
 
-Alumnos:
+Alumnos: 
 Morel Marcos
 Gimenez Thomas
 Luca Madrid
