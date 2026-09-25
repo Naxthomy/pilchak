@@ -1,21 +1,24 @@
-/* Variables para colores principales */
 :root {
-  --primary-color: #4f46e5;
-  --primary-hover: #4338ca;
-  --bg-gradient: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
-  --card-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  --primary-color: #6366f1;
+  --primary-hover: #4f46e5;
+  --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+  --card-bg: #1e293b;
+  --card-border: #334155;
+  --card-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --input-bg: #0f172a;
+  --input-border: #334155;
 }
 
-/* General / Background */
 body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   background: var(--bg-gradient);
   min-height: 100vh;
   margin: 0;
-  color: #374151;
+  color: var(--text-main);
 }
 
-/* Envoltorio principal para Auth (Login / Register) */
 .auth-wrapper {
   min-height: 100vh;
   display: flex;
@@ -24,45 +27,72 @@ body {
   padding: 1.5rem;
 }
 
-/* Tarjeta contenedora de Login y Register */
 .auth-card {
-  background: #ffffff;
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
   padding: 2.5rem 2rem;
-  border-radius: 1rem;
+  border-radius: 1.25rem;
   box-shadow: var(--card-shadow);
   width: 100%;
-  max-width: 400px;
-  border: 1px solid rgba(229, 231, 235, 0.8);
+  max-width: 420px;
 }
 
-/* Ajustes a los inputs */
+.auth-subtitle {
+  color: #cbd5e1;
+}
+
+.auth-footer-text {
+  color: #cbd5e1;
+}
+
+/* Forzado de contraste limpio sobre textos dentro del layout */
+.auth-card h1, 
+.auth-card h4, 
+.auth-card p,
+.auth-card label,
+.form-label {
+  color: var(--text-main);
+}
+
+.auth-card .text-muted {
+  color: var(--text-muted);
+}
+
+/* Inputs en modo oscuro */
 .form-control {
-  border-radius: 0.5rem;
-  padding: 0.65rem 0.85rem;
-  border: 1px solid #d1d5db;
-  transition: all 0.2s ease-in-out;
+  background-color: var(--input-bg);
+  color: var(--text-main);
+  border-radius: 0.65rem;
+  padding: 0.75rem 0.9rem;
+  border: 1.5px solid var(--input-border);
+  transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
 }
 
 .form-control:focus {
+  background-color: var(--input-bg);
+  color: var(--text-main);
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.15);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.25);
 }
 
-.form-label {
-  font-weight: 600;
-  font-size: 0.875rem;
-  color: #4b5563;
-  margin-bottom: 0.35rem;
+/* Evita que el navegador pinte el input de blanco/amarillo al autocompletar */
+.form-control:-webkit-autofill,
+.form-control:-webkit-autofill:hover, 
+.form-control:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text-main);
+  -webkit-box-shadow: 0 0 0px 1000px var(--input-bg) inset;
+  transition: background-color 5000s ease-in-out 0s;
 }
 
 /* Botón principal */
 .btn-primary {
   background-color: var(--primary-color);
   border-color: var(--primary-color);
-  border-radius: 0.5rem;
-  padding: 0.65rem 1rem;
+  border-radius: 0.65rem;
+  padding: 0.75rem 1rem;
   font-weight: 600;
-  transition: all 0.2s ease;
+  color: #ffffff;
+  transition: background-color 0.2s ease, transform 0.2s ease;
 }
 
 .btn-primary:hover,
@@ -72,9 +102,8 @@ body {
   transform: translateY(-1px);
 }
 
-
 a {
-  color: var(--primary-color);
+  color: #818cf8;
   text-decoration: none;
   font-weight: 600;
 }
@@ -83,28 +112,49 @@ a:hover {
   text-decoration: underline;
 }
 
-.index-container {
-  max-width: 800px;
-  margin: 4rem auto;
-  padding: 0 1.5rem;
-}
-
-.index-header {
-  background: #ffffff;
-  padding: 3rem 2rem;
-  border-radius: 1rem;
-  box-shadow: var(--card-shadow);
+/* Divisor 'o' */
+.divider {
+  display: flex;
+  align-items: center;
   text-align: center;
+  color: #64748b;
+  font-size: 0.85rem;
 }
 
-.index-header h1 {
-  color: #111827;
-  font-weight: 700;
-  margin-bottom: 0.75rem;
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid #334155;
 }
 
-.index-header p {
-  color: #6b7280;
-  font-size: 1.125rem;
-  margin-bottom: 0;
+.divider span {
+  padding: 0 0.75rem;
+}
+
+/* Botón de Google */
+.btn-google {
+  background-color: #0f172a;
+  border: 1.5px solid #334155;
+  color: #f8fafc;
+  font-weight: 600;
+  border-radius: 0.65rem;
+  padding: 0.65rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  text-decoration: none;
+}
+
+.btn-google:hover {
+  background-color: #1e293b;
+  border-color: #475569;
+  color: #ffffff;
+}
+
+.google-icon {
+  width: 18px;
+  height: 18px;
 }
