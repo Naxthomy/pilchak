@@ -16,9 +16,7 @@ if (isset($_SESSION['user'])) {
   <script src=<?= '/assets/js/bootstrap.min.js' ?>></script>
   <title>Autenticate - PDI</title>
 </head>
-<body class="bg-body-secondary">
+<body>
  
-  <div class="d-flex align-items-center justify-content-center vh-100">
-    <div class="card shadow-sm" style="width: 100%; max-width: 380px;">
-      <div class="card-body p-4">
-  
+  <div class="auth-wrapper">
+    <div class="auth-card">
