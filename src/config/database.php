@@ -1,25 +1,33 @@
 <?php
-$env = parse_ini_file(__DIR__ . '/../../.env');
+declare(strict_types=1);
 
-# Valores de la conexión, los saca del archivo '.env'
-$host    = $env['DB_HOST'];
-$db      = $env['DB_NAME'];
-$user    = $env['DB_USER'];
-$pass    = $env['DB_PASS'];
-$charset = $env['DB_CHARSET'] ?? 'utf8mb4';
+function db(): PDO
+{
+    static $pdo = null;
 
-# Data Source Name (DSN) especifica el driver (mysql), host, database, y el charset
-# No es más que un string que se usa al crear la conexión (linea 21)
-$dsn = "mysql:host=$host;dbname=$db;charset=$charset";
-$options = [
-    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-    PDO::ATTR_EMULATE_PREPARES   => false,
-];
+    if ($pdo instanceof PDO) {
+        return $pdo;
+    }
 
-try {
-     $pdo = new PDO($dsn, $user, $pass, $options);
-} catch (\PDOException $e) {
-     die("La conexión a la base de datos falló: " . $e->getMessage());
+    // Opcional: cargar .env si existe en la raÃz
+    $envFile = __DIR__ . '/../../.env';
+    $env = file_exists($envFile) ? parse_ini_file($envFile) : [];
+
+    $host    = $env['DB_HOST'] ?? getenv('DB_HOST') ?: '127.0.0.1';
+    $name    = $env['DB_NAME'] ?? getenv('DB_NAME') ?: 'pilchak';
+    $user    = $env['DB_USER'] ?? getenv('DB_USER') ?: 'root';
+    $pass    = $env['DB_PASS'] ?? getenv('DB_PASS') ?: '';
+    $charset = 'utf8mb4';
+
+    $dsn = "mysql:host={$host};dbname={$name};charset={$charset}";
+
+    $options = [
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES   => false,
+    ];
+
+    $pdo = new PDO($dsn, $user, $pass, $options);
+
+    return $pdo;
 }
-?>
