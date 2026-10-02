@@ -1,5 +1,20 @@
 DirectoryIndex index.php
+RewriteEngine On
 
+# Si el proyecto está en una subcarpeta, ajusta esto (ej: /pilchak/).
+# Si está en la raíz del dominio, usa: RewriteBase /
+RewriteBase /pilchak/
+
+# Bloquea el acceso directo por URL al código fuente
+RewriteRule ^src/ - [F,L]
+
+# Si el archivo o carpeta existe (assets, etc.), se sirve tal cual
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Todo lo demás va al front controller
+RewriteRule ^ index.php [QSA,L]
 <Files .env>
     Order allow,deny
     Deny from all
