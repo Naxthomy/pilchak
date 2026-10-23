@@ -1,0 +1,8 @@
+# Las pruebas (Python) son solo para desarrollo: no se sirven por web.
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

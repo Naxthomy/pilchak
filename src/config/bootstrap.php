@@ -2,20 +2,15 @@
 /**
  * Bootstrap global del proyecto.
  *
- * Se incluye al principio de cada "entry point" (archivos a los que
- * se accede directamente por URL: index.php, controllers/*.php).
- * Las vistas que se incluyen con require/include (layout.php, login.php, etc.)
- * NO necesitan llamarlo: ya van a recibir la sesión abierta.
+ * Se incluye al principio de los controladores (archivos a los que se accede
+ * directamente por URL y que necesitan la base de datos).
+ *
+ * - session.php  → zona horaria, sesión segura y helpers (sin DB).
+ * - database.php → conexión PDO, disponible como $pdo.
+ *
+ * Los archivos que solo necesitan la sesión (index.php, layouts) incluyen
+ * session.php directamente y evitan abrir MySQL.
  */
- 
-// Zona horaria
-date_default_timezone_set('America/Argentina/Buenos_Aires');
- 
-// Iniciamos la sesión si todavía no existe una
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
- 
-// Conexión a la base de datos, disponible en todo el proyecto como $pdo
+
+require_once __DIR__ . '/session.php';
 require_once __DIR__ . '/database.php';
- 

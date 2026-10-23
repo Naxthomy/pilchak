@@ -158,3 +158,70 @@ a:hover {
   width: 18px;
   height: 18px;
 }
+/* Wordmark de Pilchak (usa la tipografía normal del sistema, definida en body) */
+.brand-wordmark {
+  font-weight: 700;
+  letter-spacing: .3em;
+  color: var(--text-main);
+}
+
+.auth-card .brand-wordmark { font-size: 1.6rem; display: inline-block; margin-bottom: .25rem; }
+
+.auth-back { display: inline-block; margin-bottom: 1rem; font-size: .85rem; font-weight: 400; color: var(--text-muted); }
+
+/* Logo de Pilchak (assets/img/logo.png). Base común a la pantalla de carga, el login y el registro.
+   - El PNG está recortado al dibujo (sin margen transparente), así la imagen mide lo que se ve.
+   - El dibujo es negro: sobre los fondos oscuros del sitio se pinta de blanco (filter). Para usar
+     otro logo a color, borrar la línea "filter".
+   - object-fit: contain + width/height del HTML: nunca se deforma ni se sale de su contenedor. */
+.brand-logo {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+}
+
+/* Tamaño en el login y el registro; centrado con margin auto */
+.auth-logo {
+  width: 88px;
+  margin: 0 auto .75rem;
+}
+
+/* ---- Navbar de las páginas privadas (layout.php) ----
+   El navbar usa el fondo claro de Bootstrap (bg-body-secondary, #e9ecef). La marca NO debe usar
+   --text-main (casi blanco, pensado para fondos oscuros): sobre ese fondo daba 1.13:1 y solo se
+   leía al pasar el mouse. Se fija un color oscuro explícito, igual en todos los estados. */
+.navbar-wordmark,
+.navbar-wordmark:hover,
+.navbar-wordmark:focus {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: .3em;
+  color: #0f172a;        /* contraste ~14:1 sobre #e9ecef */
+  cursor: default;       /* no es cliqueable */
+  user-select: none;
+}
+
+.navbar-home {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: #0f172a;
+  background-color: transparent;
+  text-decoration: none;
+  transition: background-color .2s ease, color .2s ease;
+}
+.navbar-home:hover,
+.navbar-home:focus {
+  background-color: #0f172a;
+  color: #ffffff;        /* contraste ~17:1 */
+  text-decoration: none;
+}
+.navbar-home:focus-visible {
+  outline: 3px solid #4f46e5;
+  outline-offset: 2px;
+}

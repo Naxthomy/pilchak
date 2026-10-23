@@ -7,6 +7,9 @@ CREATE TABLE IF NOT EXISTS users (
     name        VARCHAR(50)  NOT NULL,
     email       VARCHAR(150) NOT NULL,
     password    VARCHAR(255) NOT NULL,
+    avatar     VARCHAR(255) NULL,        -- foto de perfil (ruta relativa)
+    cover      VARCHAR(255) NULL,        -- portada (ruta relativa)
+    bio        VARCHAR(160) NULL,
     rating      DECIMAL(3,2) DEFAULT 0.00, -- Para la calificación del vendedor (ej. 4.50)
     location    VARCHAR(100) NULL,        -- Ubicación del usuario
     created_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -32,6 +35,9 @@ CREATE TABLE IF NOT EXISTS posts (
     id          CHAR(36)        NOT NULL DEFAULT (UUID()),
     title       VARCHAR(255)    NOT NULL,
     description TEXT            NOT NULL,
+    phone      VARCHAR(20)  NULL,        -- WhatsApp de contacto (solo dígitos, opcional)
+    media_type ENUM('image','video') NULL,   -- adjunto de la publicación (el archivo está en disco, no en la base)
+    media_path VARCHAR(255) NULL,            -- ruta relativa del adjunto: assets/img/uploads/<id del usuario>/post_<UUID v4>.<ext>
     price       DECIMAL(10, 2)  NOT NULL,
     size        VARCHAR(20)     NOT NULL, -- Talle (S, M, L, XL, 42, etc.)
     brand       VARCHAR(100)    NULL,     -- Marca de la prenda
@@ -73,21 +79,20 @@ CREATE TABLE IF NOT EXISTS post_tags (
     FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
 );
 
--- 6. TABLA DE CHAT INTERNO (Mensajería entre Comprador y Vendedor)
-CREATE TABLE IF NOT EXISTS chats (
-    id          CHAR(36)  NOT NULL DEFAULT (UUID()),
-    sender_id   CHAR(36)  NOT NULL, -- Id del emisor
-    receiver_id CHAR(36)  NOT NULL, -- Id del receptor
-    post_id     CHAR(36)  NOT NULL, -- Publicación sobre la cual están negociando
-    message     TEXT      NOT NULL,
-    is_read     BOOLEAN   NOT NULL DEFAULT FALSE,
-    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
+-- 6. Comentarios de las publicaciones. SOLO ESQUEMA: la interfaz tiene el botón "Comentar" (maquetado),
+-- pero todavía no hay API ni lógica que lea o escriba en esta tabla.
+CREATE TABLE IF NOT EXISTS comments (
+    id         CHAR(36)      NOT NULL DEFAULT (UUID()),
+    post_id    CHAR(36)      NOT NULL,
+    user_id    CHAR(36)      NOT NULL,
+    content    VARCHAR(1000) NOT NULL,
+    created_at TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
+    KEY idx_comments_post_created (post_id, created_at),
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
 
 -- 7. TABLA DE REPORTES / DENUNCIAS
 CREATE TABLE IF NOT EXISTS reports (

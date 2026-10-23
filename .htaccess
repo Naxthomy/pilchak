@@ -1,21 +1,26 @@
 DirectoryIndex index.php
-RewriteEngine On
 
-# Si el proyecto está en una subcarpeta, ajusta esto (ej: /pilchak/).
-# Si está en la raíz del dominio, usa: RewriteBase /
-RewriteBase /pilchak/
+# Bloquea el acceso web a .env, a los .sql (schema y migraciones) y a README.md (Apache 2.4, con fallback a 2.2).
+# Ojo: esto NO aplica con `php -S` ni con Nginx; en producción conviene
+# guardar el .env fuera del directorio público.
+<FilesMatch "^(\.env.*|.*\.sql|README\.md)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
 
-# Bloquea el acceso directo por URL al código fuente
-RewriteRule ^src/ - [F,L]
-
-# Si el archivo o carpeta existe (assets, etc.), se sirve tal cual
-RewriteCond %{REQUEST_FILENAME} -f [OR]
-RewriteCond %{REQUEST_FILENAME} -d
-RewriteRule ^ - [L]
-
-# Todo lo demás va al front controller
-RewriteRule ^ index.php [QSA,L]
-<Files .env>
-    Order allow,deny
-    Deny from all
-</Files>
+# Borrador viejo de la API (PruebaPostsAnterior.php): usa otra clave de sesión y expone PUT/DELETE
+# sin verificar que el post sea del usuario. No se borra, pero queda inaccesible por web.
+<FilesMatch "^PruebaPostsAnterior\.php$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>

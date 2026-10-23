@@ -1,20 +1,27 @@
 <?php
 require_once __DIR__ . '/../../config/bootstrap.php';
+require_login();
+require_post_csrf();
+
+$title   = input_str($_POST, 'title');
+$content = input_str($_POST, 'content');
+
+if ($title === '' || $content === '' || text_length($title) > 255 || text_length($content) > 10000) {
+    flash_set('post_error', 'Completá el título (hasta 255 caracteres) y el contenido (hasta 10000).');
+    flash_set('post_old', ['title' => $title, 'content' => $content]);
+    redirect('/src/controllers/posts/form.php');
+}
 
 try {
-    if (!isset($_POST['title'], $_POST['content'])) {
-        throw new Exception('Faltan datos del formulario');
-    }
-
     $stmt = $pdo->prepare('INSERT INTO posts (title, content, user_id) VALUES (:title, :content, :user_id)');
     $stmt->execute([
-        'title' => $_POST['title'],
-        'content' => $_POST['content'],
-        'user_id' => $_SESSION['user']['id'],
+        'title'   => $title,
+        'content' => $content,
+        'user_id' => current_user()['id'],
     ]);
-
-    header('Location: /src/controllers/posts/index.php');
-    exit;
 } catch (PDOException $e) {
-    exit('Error al crear el post');
+    error_log('[Pilchak] Error al crear post: ' . $e->getMessage());
+    abort_with(500, 'No pudimos crear el post. Intentá de nuevo más tarde.');
 }
+
+redirect('/src/controllers/posts/index.php');

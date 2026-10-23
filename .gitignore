@@ -20,3 +20,7 @@ Thumbs.db
 # IDE / editor files
 .vscode/
 .idea/
+
+# Archivos subidos por los usuarios (se conserva solo el .htaccess que los protege)
+assets/img/uploads/*
+!assets/img/uploads/.htaccess

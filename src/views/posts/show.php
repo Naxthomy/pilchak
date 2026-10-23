@@ -1,5 +1,6 @@
 <?php
 include(__DIR__ . '/../_layouts/layout.php');
+$me = current_user();
 ?>
 
 <header class="row mb-4">
@@ -17,20 +18,23 @@ include(__DIR__ . '/../_layouts/layout.php');
       <div class="card-body">
         <div class="row">
           <div class="col">
-            <h2 class="card-title"><?= $post['title'] ?></h2>
+            <h2 class="card-title"><?= e($post['title']) ?></h2>
           </div>
-          <?php if (isset($_SESSION['user']) && $_SESSION['user']['id'] === $post['user_id']): ?>
-            <div class="col d-flex justify-content-end align-items-center">
-              <a class="btn btn-secondary me-3" href="/src/views/posts/update.php?id=<?= $post['id'] ?>">Editar</a>
-              <a class="btn btn-danger" href="/src/controllers/posts/delete.php?id=<?= $post['id'] ?>" onclick="return confirm('¿Estás seguro de que deseas eliminar este post?');">Eliminar</a>
+          <?php if ($me && $me['id'] === $post['user_id']): ?>
+            <div class="col d-flex justify-content-end align-items-center gap-3">
+              <a class="btn btn-secondary" href="/src/controllers/posts/form.php?id=<?= e($post['id']) ?>">Editar</a>
+              <form method="POST" action="/src/controllers/posts/delete.php" onsubmit="return confirm('¿Estás seguro de que deseas eliminar este post?');">
+                <?= csrf_field() ?>
+                <input type="hidden" name="id" value="<?= e($post['id']) ?>">
+                <button type="submit" class="btn btn-danger">Eliminar</button>
+              </form>
             </div>
           <?php endif; ?>
         </div>
 
-        
-        <p class="card-text"><?= nl2br($post['content']) ?></p>
-        <p class="card-text"><strong>Autor:</strong> <?= $post['user_name'] ?></p>
-        <p class="text-muted">Publicado el <?= $post['created_at'] ?></p>
+        <p class="card-text"><?= nl2br(e($post['content'])) ?></p>
+        <p class="card-text"><strong>Autor:</strong> <?= e($post['user_name']) ?></p>
+        <p class="text-muted">Publicado el <?= e($post['created_at']) ?></p>
       </div>
 
       <section>
