@@ -1,0 +1,11 @@
+# Archivos subidos por los usuarios (fotos de perfil/portada e imágenes/videos de publicaciones).
+# Solo se deben servir imágenes y videos: nunca se ejecuta ni se muestra código.
+<FilesMatch "\.(php[0-9s]?|phtml|phar|pl|py|cgi|sh|html?|js|svg)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
