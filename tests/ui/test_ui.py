@@ -84,12 +84,12 @@ with sync_playwright() as pw:
     msg = _q(_u(w[0]["href"]).query)["text"][0] if w[0] else ""
     check("1.12 WhatsApp: abre wa.me/<número> en pestaña nueva con noopener y mensaje con el título", w[0] and w[0]["href"].startswith("https://wa.me/5491123456789?text=") and w[0]["target"] == "_blank" and "noopener" in w[0]["rel"] and "Campera de jean" in msg and "undefined" not in msg and "()" not in msg, (w[0], msg))
     check("1.12b los likes siguen siendo locales", p.evaluate("!!document.querySelector('.action-like')"))
-    # ---- Botón de comentarios: solo maquetado ----
+    # ---- Botón de comentarios (abre el modal; ver también el bookmark) ----
     cm = p.evaluate("""[...document.querySelectorAll('.post')].map(s=>{
-        const acts=[...s.querySelector('.post-actions').children].map(n=>n.classList.contains('post-avatar')?'avatar':[...n.classList].find(c=>/^action-(like|comment|wsp)$/.test(c)));
+        const acts=[...s.querySelector('.post-actions').children].map(n=>n.classList.contains('post-avatar')?'avatar':[...n.classList].find(c=>/^action-(like|comment|save|wsp)$/.test(c)));
         const b=s.querySelector('.action-comment');
         return {order:acts.join(),tag:b&&b.tagName,type:b&&b.type,aria:b&&b.getAttribute('aria-label'),label:b&&b.querySelector('.action-label').textContent,use:b&&b.querySelector('use').getAttribute('href')};})""")
-    check("1.12c TODAS las publicaciones (7 de 7) tienen el botón de comentarios justo debajo de «Me gusta» y arriba de WhatsApp", len(cm) == 7 and all(x["order"] == "avatar,action-like,action-comment,action-wsp" for x in cm), cm[:1])
+    check("1.12c TODAS las publicaciones (7 de 7) tienen «Comentar» debajo de «Me gusta» y «Guardar» (bookmark) justo después, arriba de WhatsApp", len(cm) == 7 and all(x["order"] == "avatar,action-like,action-comment,action-save,action-wsp" for x in cm), cm[:1])
     check("1.12d el botón es un <button type=button> accesible (aria-label «Comentarios», texto «Comentar», ícono del sprite i-comment)", all(x["tag"] == "BUTTON" and x["type"] == "button" and x["aria"] == "Comentarios" and x["label"] == "Comentar" and x["use"] == "#i-comment" for x in cm), cm[:1])
     check("1.12e el símbolo i-comment existe en el sprite SVG", p.evaluate("!!document.querySelector('symbol#i-comment path')"))
     g = p.evaluate("""(()=>{const s=document.querySelector('.post');const r=q=>s.querySelector(q).getBoundingClientRect();const l=r('.action-like'),c=r('.action-comment'),w=r('.action-wsp');
@@ -98,8 +98,9 @@ with sync_playwright() as pw:
     reqs = []; p.on("request", lambda r: reqs.append(r.url))
     sh0 = shown(p); like0 = p.evaluate("document.querySelector('.action-like').getAttribute('aria-pressed')"); n0 = len(p.evaluate("[...document.querySelectorAll('.post')]"))
     p.click(".post .action-comment >> nth=0"); p.wait_for_timeout(400)
-    check("1.12g clic en «Comentar»: no hace nada todavía (sin pedidos de red, sin modal, sin cambiar el «me gusta», sin errores)",
-          not reqs and shown(p) == sh0 and p.evaluate("document.querySelector('.action-like').getAttribute('aria-pressed')") == like0 == "false" and not p.evaluate("document.querySelector('.action-comment').classList.contains('is-active')") and not p.errors, (reqs, p.errors))
+    check("1.12g clic en «Comentar»: abre el modal de comentarios y pide los comentarios de ESA publicación (sin tocar «me gusta», sin errores)",
+          p.evaluate("document.getElementById('commentsModal').classList.contains('show')") and any("interactions.php?resource=comments&post_id=" in u for u in reqs) and shown(p) == sh0 and p.evaluate("document.querySelector('.action-like').getAttribute('aria-pressed')") == like0 == "false" and not p.errors, (reqs, p.errors))
+    p.click("#commentsModal [data-bs-dismiss=modal]"); p.wait_for_selector("#commentsModal:not(.show)", state="attached", timeout=2000); p.wait_for_timeout(500)
     cs = browser_small = br.new_context(viewport={"width": 320, "height": 568}, has_touch=True)
     cs.route("**/*", lambda r: r.continue_() if r.request.url.startswith(BASE) else r.abort())
     cs.add_cookies([{"name": "sid", "value": "s1", "url": BASE}])
