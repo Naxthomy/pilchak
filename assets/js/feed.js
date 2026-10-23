@@ -1,10 +1,16 @@
 // Feed de Pilchak: pide las publicaciones a la API, las dibuja y gestiona autoplay/pausa de videos,
-// "me gusta" (local) y navegación con teclado.
+// "me gusta" (local), comentarios, guardados (bookmark) y navegación con teclado.
 //
 // API usada: GET /src/controllers/api/posts.php  ->  { status, count, data: [ {id, title, content, phone,
 //            media_type, media_url, created_at, updated_at, user_id, user_name} ] }
 //            phone: WhatsApp opcional, solo dígitos, o null.   media_type: 'image' | 'video' | null.
 //            media_url: ruta pública del archivo (/assets/img/uploads/<usuario>/post_<UUID>.<ext>) o null.
+// API de interacciones: /src/controllers/api/interactions.php (data-api-interactions en #feed)
+//            GET  ?resource=comments&post_id=ID  -> { data: [ {id, content, created_at, user_id, user_name} ] }
+//            POST ?resource=comments  {post_id, content}  -> 201 { data: {comentario} }
+//            GET  ?resource=saves                        -> { data: [ids guardados por el usuario] }
+//            POST ?resource=saves     {post_id, saved}   -> { data: {post_id, saved} }   (saved: true | false)
+//            Los POST llevan la cabecera X-CSRF-Token (de <meta name="csrf-token">, que solo existe con sesión).
 // Todo lo que viene del servidor se escribe con textContent / atributos (nunca innerHTML): no hay XSS.
 (function () {
   'use strict';
@@ -13,6 +19,11 @@
   if (!feed) { return; }
 
   var API_URL   = feed.dataset.api;
+  var INTERACTIONS_URL = feed.dataset.apiInteractions;   // comentarios y guardados
+  var csrfMeta  = document.querySelector('meta[name="csrf-token"]');   // solo existe con sesión iniciada (ver landing.php)
+  var IS_AUTH   = !!csrfMeta;
+  var CSRF_TOKEN = csrfMeta ? csrfMeta.getAttribute('content') : '';
+  var COMMENT_MAX = 1000;            // mismo tope que la API y la columna comments.content
   var DEFAULT_PHONE = String(feed.dataset.defaultPhone || '');   // número general de WhatsApp (ver landing.php)
   var LIKES_KEY = 'pilchak_likes';   // ids con "me gusta" (localStorage, solo en este navegador: la API no tiene likes)
   var SVG_NS    = 'http://www.w3.org/2000/svg';
@@ -45,6 +56,12 @@
   function formatDate(value) {
     var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || ''));
     return m ? m[3] + '/' + m[2] + '/' + m[1] : '';
+  }
+
+  // "2026-10-23 03:55:57" -> "23/10/2026 03:55" (los comentarios muestran también la hora)
+  function formatDateTime(value) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(String(value || ''));
+    return m ? m[3] + '/' + m[2] + '/' + m[1] + ' ' + m[4] + ':' + m[5] : '';
   }
 
   // Adjunto de una publicación real. Solo se acepta la forma exacta de URL que genera el servidor
@@ -182,8 +199,7 @@
     like.appendChild(el('span', 'action-label', 'Me gusta'));
     actions.appendChild(like);
 
-    // Comentarios: por ahora SOLO maquetado, sin lógica. El listener del feed no hace nada con
-    // data-action="comment"; queda como punto de enganche para cuando se implemente.
+    // Comentarios: el listener del feed (más abajo) abre el modal #commentsModal con data-action="comment".
     var comment = el('button', 'action-btn action-comment');
     comment.type = 'button';
     comment.dataset.action = 'comment';
@@ -191,6 +207,16 @@
     comment.appendChild(icon('i-comment'));
     comment.appendChild(el('span', 'action-label', 'Comentar'));
     actions.appendChild(comment);
+
+    // Guardar (bookmark): data-action="save". paintSave() le pone el estado (is-active, aria-pressed y texto).
+    var save = el('button', 'action-btn action-save');
+    save.type = 'button';
+    save.dataset.action = 'save';
+    save.setAttribute('aria-pressed', 'false');
+    save.setAttribute('aria-label', 'Guardar publicación');
+    save.appendChild(icon('i-bookmark'));
+    save.appendChild(el('span', 'action-label', 'Guardar'));
+    actions.appendChild(save);
 
     var wsp = whatsappUrl(p);
     if (wsp) {
@@ -264,6 +290,201 @@
     heart.classList.add('is-playing');
   }
 
+  // ---------- Pedidos a la API de interacciones ----------
+  // Devuelve una promesa con el cuerpo { status, data, ... }. Si falla, rechaza con un Error cuyo
+  // .messages es una lista de textos listos para mostrar (los de la API, o uno genérico).
+  var GENERIC_ERROR = 'No pudimos completar la acción. Intentá de nuevo.';
+
+  function interactionsRequest(resource, method, query, body) {
+    var options = { method: method, credentials: 'same-origin', headers: { 'Accept': 'application/json' } };
+    if (method === 'POST') {
+      options.headers['Content-Type'] = 'application/json';
+      options.headers['X-CSRF-Token'] = CSRF_TOKEN;
+      options.body = JSON.stringify(body);
+    }
+    return fetch(INTERACTIONS_URL + '?resource=' + resource + (query || ''), options).then(function (res) {
+      return res.text().then(function (text) {
+        var json = null;
+        try { json = JSON.parse(text); } catch (e) { /* respuesta no JSON (p. ej. error del servidor) */ }
+        if (!res.ok || !json || json.status !== 'success') {
+          var err = new Error('Respuesta inválida de la API');
+          err.messages = json && Array.isArray(json.errors) && json.errors.length ? json.errors.map(String)
+                       : json && typeof json.message === 'string' && json.message ? [json.message]
+                       : [GENERIC_ERROR];
+          throw err;
+        }
+        return json;
+      });
+    });
+  }
+
+  function errorMessages(err) {
+    return err && Array.isArray(err.messages) ? err.messages : [GENERIC_ERROR];   // sin .messages = falló la red
+  }
+
+  // ---------- Guardados (bookmark, se guardan en la base de datos del usuario) ----------
+  var savedPosts = {};    // { idPublicacion: true }: lo que el servidor dice que el usuario guardó
+  var savePending = {};   // { idPublicacion: true }: pedido en curso (evita dobles clics)
+
+  function paintSave(post) {
+    var btn = post.querySelector('.action-save');
+    if (!btn) { return; }
+    var on = savedPosts[post.dataset.postId] === true;
+    btn.classList.toggle('is-active', on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.setAttribute('aria-label', on ? 'Quitar de guardados' : 'Guardar publicación');
+    btn.querySelector('.action-label').textContent = on ? 'Guardado' : 'Guardar';
+  }
+
+  // Cambia el estado de una publicación y repinta todas las tarjetas con ese id.
+  function setSaved(id, on) {
+    if (on) { savedPosts[id] = true; } else { delete savedPosts[id]; }
+    feed.querySelectorAll('.post').forEach(function (post) {
+      if (post.dataset.postId === id) { paintSave(post); }
+    });
+  }
+
+  // Al cargar el feed: pide los ids guardados y marca los iconos. Si falla, el feed sigue sin marcas.
+  function loadSaved() {
+    if (!IS_AUTH) { return; }
+    interactionsRequest('saves', 'GET')
+      .then(function (json) {
+        json.data.forEach(function (id) { savedPosts[String(id)] = true; });
+        feed.querySelectorAll('.post').forEach(paintSave);
+      })
+      .catch(noop);
+  }
+
+  // Clic en el bookmark: cambia el icono YA (optimista) y avisa al servidor; si falla, vuelve atrás.
+  function toggleSave(post) {
+    var id = post.dataset.postId;
+    if (post.dataset.demo) { notify('Las publicaciones de demostración no se pueden guardar'); return; }
+    if (!IS_AUTH) { notify('Iniciá sesión para guardar publicaciones'); return; }
+    if (savePending[id]) { return; }
+
+    var want = savedPosts[id] !== true;
+    savePending[id] = true;
+    setSaved(id, want);
+    interactionsRequest('saves', 'POST', '', { post_id: id, saved: want })
+      .then(function () { notify(want ? 'Publicación guardada' : 'Quitada de guardados'); })
+      .catch(function (err) { setSaved(id, !want); notify(errorMessages(err)[0]); })
+      .then(function () { delete savePending[id]; });
+  }
+
+  // ---------- Comentarios (modal) ----------
+  var commentsEl = document.getElementById('commentsModal');
+  var commentsModal = commentsEl && window.bootstrap ? new window.bootstrap.Modal(commentsEl) : null;
+  var commentsList = document.getElementById('commentsList');
+  var commentsStatus = document.getElementById('commentsStatus');
+  var commentForm = document.getElementById('commentForm');          // null para invitados (ver landing.php)
+  var commentInput = document.getElementById('commentInput');
+  var commentErrors = document.getElementById('commentErrors');
+  var commentSubmit = document.getElementById('commentSubmit');
+
+  var commentsPostId = null;    // publicación cuyo modal está abierto (null = cerrado)
+  var commentsRequestId = 0;    // sirve para descartar respuestas viejas (se cerró o se abrió otra publicación)
+  var sendingComment = false;   // evita enviar dos veces el mismo comentario
+
+  function setCommentsStatus(text) { commentsStatus.textContent = text; }
+
+  function showCommentErrors(list) {
+    commentErrors.textContent = '';
+    var ul = el('ul', 'mb-0 ps-3');
+    list.forEach(function (msg) { ul.appendChild(el('li', null, msg)); });   // texto, nunca HTML
+    commentErrors.appendChild(ul);
+    commentErrors.classList.remove('d-none');
+  }
+
+  function clearCommentErrors() {
+    if (!commentErrors) { return; }
+    commentErrors.textContent = '';
+    commentErrors.classList.add('d-none');
+  }
+
+  function appendComment(c) {
+    var item = el('li', 'comment-item');
+    var head = el('div', 'comment-head');
+    head.appendChild(el('span', 'comment-author', String(c.user_name || '')));
+    head.appendChild(el('span', 'comment-date', formatDateTime(c.created_at)));
+    item.appendChild(head);
+    item.appendChild(el('p', 'comment-body', String(c.content || '')));
+    commentsList.appendChild(item);
+  }
+
+  function scrollCommentsToEnd() {
+    var body = commentsList.closest('.modal-body');
+    if (body) { body.scrollTop = body.scrollHeight; }
+  }
+
+  function openComments(post) {
+    if (!commentsModal) { return; }
+    if (post.dataset.demo) { notify('Las publicaciones de demostración no tienen comentarios'); return; }
+
+    var id = post.dataset.postId;
+    if (commentForm && commentsPostId !== id) { commentInput.value = ''; }   // el borrador no pasa de una publicación a otra
+    commentsPostId = id;
+    commentsList.textContent = '';
+    setCommentsStatus('Cargando comentarios...');
+    clearCommentErrors();
+    commentsModal.show();
+
+    var requestId = ++commentsRequestId;
+    interactionsRequest('comments', 'GET', '&post_id=' + encodeURIComponent(id))
+      .then(function (json) {
+        if (requestId !== commentsRequestId) { return; }   // llegó tarde: ya no corresponde a lo que se ve
+        json.data.forEach(appendComment);
+        setCommentsStatus(json.data.length ? '' : 'Todavía no hay comentarios. ¡Sé el primero!');
+        scrollCommentsToEnd();
+      })
+      .catch(function () {
+        if (requestId === commentsRequestId) { setCommentsStatus('No pudimos cargar los comentarios.'); }
+      });
+  }
+
+  function submitComment(ev) {
+    ev.preventDefault();
+    if (sendingComment || !commentsPostId) { return; }
+
+    var text = commentInput.value.trim();
+    if (!text) { showCommentErrors(['Escribí un comentario antes de enviar.']); return; }
+    if (text.length > COMMENT_MAX) { showCommentErrors(['El comentario no puede superar ' + COMMENT_MAX + ' caracteres.']); return; }
+
+    var postId = commentsPostId;
+    sendingComment = true;
+    commentSubmit.disabled = true;
+    clearCommentErrors();
+
+    interactionsRequest('comments', 'POST', '', { post_id: postId, content: text })
+      .then(function (json) {
+        if (postId !== commentsPostId) { notify('Comentario publicado'); return; }   // se cerró el modal mientras tanto
+        appendComment(json.data);
+        setCommentsStatus('');
+        commentInput.value = '';
+        scrollCommentsToEnd();
+      })
+      .catch(function (err) {
+        if (postId === commentsPostId) { showCommentErrors(errorMessages(err)); } else { notify(errorMessages(err)[0]); }
+      })
+      .then(function () { sendingComment = false; commentSubmit.disabled = false; });
+  }
+
+  if (commentsEl) {
+    commentsEl.addEventListener('hidden.bs.modal', function () {
+      commentsPostId = null;
+      commentsRequestId++;                       // cualquier respuesta pendiente queda descartada
+      feed.focus({ preventScroll: true });       // el foco vuelve al feed para seguir con teclado
+    });
+    commentsEl.addEventListener('shown.bs.modal', function () {
+      if (commentInput) { commentInput.focus(); }
+    });
+  }
+  if (commentForm) {
+    commentForm.addEventListener('submit', submitComment);
+    commentInput.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); commentSubmit.click(); }
+    });
+  }
+
   // ---------- Autoplay/pausa de videos ----------
   // Un único observer para TODAS las publicaciones, también las agregadas después por JavaScript:
   // cada publicación nueva se registra con observer.observe() en finish().
@@ -297,6 +518,7 @@
   function finish(section) {
     attachSpinner(section);
     paintLike(section);
+    paintSave(section);
     observer.observe(section);
   }
 
@@ -377,6 +599,10 @@
 
     if (btn.dataset.action === 'like') {
       setLike(post, likes[post.dataset.postId] !== true);
+    } else if (btn.dataset.action === 'comment') {
+      openComments(post);
+    } else if (btn.dataset.action === 'save') {
+      toggleSave(post);
     } else if (btn.dataset.action === 'profile') {
       notify('Perfil de ' + post.dataset.seller + ': próximamente');
     }
@@ -408,5 +634,6 @@
     feed.scrollTo({ top: target * feed.clientHeight, behavior: 'smooth' });
   });
 
+  loadSaved();
   load();
 })();

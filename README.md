@@ -15,10 +15,10 @@ Incluye:
 - Una landing pública con pantalla de carga (overlay) y un feed de publicaciones. Lo ven invitados y usuarios con sesión.
 - Registro, login y logout, con sesión segura y protección CSRF.
 - Un formulario para publicar (con sesión) que usa la API REST de posts.
-- Una **API JSON** (`GET` para listar y `POST` para crear publicaciones, con imagen o video opcionales).
+- Una **API JSON** de posts (`GET` para listar y `POST` para crear publicaciones, con imagen o video opcionales) y otra de interacciones (`interactions.php`: comentarios y guardados).
 - Perfil de usuario con foto, portada y «Mis publicaciones».
 - Subida de archivos validada por su contenido real y guardada en disco (nunca en la base de datos).
-- Un botón de **comentarios** en cada publicación (por ahora solo maquetado; ver §6).
+- **Comentarios** (modal con lista y formulario) y **guardado (bookmark)** de publicaciones, ambos en la base de datos (ver §5 y §6).
 - Conexión a base de datos usando PDO y configuración desde un archivo `.env`.
 
 ## 2. Requisitos previos
@@ -43,11 +43,11 @@ Incluye:
 │   ├── img/                logo e imágenes fijas
 │   │   └── uploads/        Archivos subidos por los usuarios (con su propio .htaccess; no se versionan)
 │   └── js/                 landing.js, feed.js, publish.js (+ Bootstrap)
-├── migrations/             Scripts SQL incrementales para bases de datos ya existentes (001, 002, 003, 004)
+├── migrations/             Scripts SQL incrementales para bases de datos ya existentes (001 a 005)
 ├── src/
 │   ├── config/             session.php, bootstrap.php, database.php
 │   ├── controllers/
-│   │   ├── api/            posts.php (API JSON). PruebaPostsAnterior.php es un borrador viejo: conviene borrarlo
+│   │   ├── api/            posts.php e interactions.php (API JSON). PruebaPostsAnterior.php es un borrador viejo: conviene borrarlo
 │   │   ├── auth/           login.php, register.php, logout.php
 │   │   ├── posts/          index, show, form, store, update, delete (flujo con formularios HTML)
 │   │   └── profile/        upload.php (foto de perfil y portada)
@@ -268,13 +268,28 @@ Siempre con la forma `{"status": "error", "message": "...", "errors": ["..."]}` 
 | `422` | Datos inválidos: campos faltantes o muy largos, teléfono inválido, archivo con formato, tamaño o contenido no permitidos, o usuario de la sesión inexistente. |
 | `500` | Error del servidor (detalle solo en el log) o falta una migración (001 o 003). |
 
-No existen endpoints para editar o eliminar posts, ni para comentarios, likes o búsqueda: el feed no los simula (los «me gusta» son locales al navegador).
+No existen endpoints para editar o eliminar posts, ni para likes o búsqueda: el feed no los simula (los «me gusta» son locales al navegador).
+
+### API de interacciones: `src/controllers/api/interactions.php`
+
+Requiere las migraciones **004** (`comments`) y **005** (`saved_posts`). El recurso se elige con `?resource=`. Todos los `POST` van en JSON (`Content-Type: application/json`), exigen sesión (`401`) y el token CSRF en la cabecera `X-CSRF-Token` (`403`).
+
+| Método y recurso | Qué hace | Respuesta |
+|---|---|---|
+| `GET ?resource=comments&post_id=<uuid>` | Los últimos 100 comentarios de una publicación, del más viejo al más nuevo. Público. | `200 { status, count, data: [{ id, content, created_at, user_id, user_name }] }` |
+| `POST ?resource=comments` con `{ "post_id", "content" }` | Crea un comentario (1 a 1000 caracteres). El autor sale de la sesión. | `201 { status, data: { comentario } }` |
+| `GET ?resource=saves` | Ids de las publicaciones que guardó el usuario. Un invitado recibe lista vacía. | `200 { status, count, data: ["<uuid>", ...] }` |
+| `POST ?resource=saves` con `{ "post_id", "saved": true\|false }` | Guarda o quita el guardado. Es idempotente (repetirlo no cambia nada). | `200 { status, data: { post_id, saved } }` |
+
+Errores: `400` (resource inválido o JSON roto), `401`, `403`, `404` (la publicación no existe), `405`, `415` (no es JSON), `422` (datos inválidos) y `500` (falta la migración 004 o 005, u otro error del servidor).
 
 ## 6. Interfaz
 
 - **Feed** (`src/views/landing.php` + `assets/js/feed.js`): pide las publicaciones a la API y las dibuja con el DOM (`textContent`, nunca `innerHTML`, así no hay XSS). Las publicaciones con imagen o video se muestran a pantalla completa (autoplay y pausa de videos); las de solo texto, como tarjeta. Solo se aceptan `media_url` con el formato exacto que genera el servidor y cuyo tipo coincida con la extensión.
-- **Acciones de cada publicación** (columna derecha, de arriba abajo): perfil, **Me gusta**, **Comentar** y WhatsApp.
-- **Botón «Comentar»**: por ahora es **solo maquetado**. Es un `<button type="button">` con ícono (`#i-comment` en el sprite SVG de `landing.php`) y `data-action="comment"` como punto de enganche, pero no tiene lógica: no hace pedidos, no abre nada y no cambia estado. La tabla `comments` (migración 004) ya está preparada para cuando se implemente.
+- **Acciones de cada publicación** (columna derecha, de arriba abajo): perfil, **Me gusta**, **Comentar**, **Guardar** y WhatsApp.
+- **Botón «Comentar»** (`data-action="comment"`): abre el modal `#commentsModal` (`landing.php`), pide los comentarios de esa publicación y, con sesión, permite escribir y enviar (botón «Enviar» o Ctrl + Enter). Los invitados pueden leer; para comentar se les pide iniciar sesión. Los textos se dibujan con `textContent` (sin XSS).
+- **Botón «Guardar»** (bookmark, `data-action="save"`): con sesión, cambia el icono al instante y guarda o quita la publicación en la tabla `saved_posts`; si el servidor falla, el icono vuelve atrás y se avisa. Al cargar el feed se piden los guardados del usuario para marcar los iconos. Un invitado recibe el aviso «Iniciá sesión para guardar publicaciones».
+- Las publicaciones de **demostración** (ids `1` a `4`, sin UUID) no se pueden comentar ni guardar: no existen en la base de datos.
 - **Formulario de publicar** (`assets/js/publish.js`, solo con sesión): validación, envío `POST` (JSON, o `multipart` con archivo) con CSRF, bloqueo de envíos duplicados y errores del servidor.
 - `landing.js`: overlay de carga, avisos, barras de navegación y popup de invitados.
 
@@ -322,7 +337,7 @@ El login con Google todavía no está implementado: el botón aparece deshabilit
 
 ## 9. Pruebas
 
-En `tests/ui/` hay una batería (100 pruebas) que abre el feed en un Chromium real (Playwright) y comprueba: barras y popup, formulario de publicar, WhatsApp, videos, responsive, navbar privado, el **botón de comentarios** (posición debajo de «Me gusta», accesibilidad, que no haga nada y que no se tape en pantallas de 320 px), la carga de imágenes y videos, y que las URLs de adjuntos peligrosas (`javascript:`, `../`, externas, tipo cruzado) no lleguen al DOM.
+En `tests/ui/` hay una batería (100 pruebas) que abre el feed en un Chromium real (Playwright) y comprueba: barras y popup, formulario de publicar, WhatsApp, videos, responsive, navbar privado, los **botones de comentarios y guardado** (posición, accesibilidad, que «Comentar» abra el modal y que no se tape en pantallas de 320 px), la carga de imágenes y videos, y que las URLs de adjuntos peligrosas (`javascript:`, `../`, externas, tipo cruzado) no lleguen al DOM.
 
 **No necesita PHP ni MySQL**: `harness.py` renderiza `landing.php` y `layout.php` con un mini-evaluador de plantillas y emula la API según su contrato.
 

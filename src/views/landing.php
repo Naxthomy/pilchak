@@ -67,6 +67,7 @@ $demoJson = json_encode($demoPosts, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS 
     <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
     <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 21s-8-5.2-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 10c0 5.8-8 11-8 11z"/></symbol>
     <symbol id="i-comment" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></symbol>
+    <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"/></symbol>
     <symbol id="i-wsp" viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.6 15L2 22l5.2-1.4A10 10 0 1 0 12 2zm5.2 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.2-.7-2.7-1.1-4.4-3.8-4.5-4-.1-.2-1.1-1.4-1.1-2.7 0-1.3.7-1.9.9-2.2.2-.2.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.3 0 .5l-.3.4-.4.4c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.6-.1l.9-1c.2-.3.4-.2.6-.1l1.9.9c.3.1.5.2.5.3.1.1.1.6-.1 1.1z"/></symbol>
   </svg>
 
@@ -97,7 +98,7 @@ $demoJson = json_encode($demoPosts, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS 
 
   <!-- Feed vertical. tabindex=0 permite scrollear con el teclado (flechas, RePág).
        Las publicaciones las dibuja assets/js/feed.js con los datos de data-api. -->
-  <main id="feed" class="feed" tabindex="0" aria-label="Publicaciones" aria-busy="true" data-api="/src/controllers/api/posts.php" data-default-phone="<?= e($defaultWhatsapp) ?>">
+  <main id="feed" class="feed" tabindex="0" aria-label="Publicaciones" aria-busy="true" data-api="/src/controllers/api/posts.php" data-api-interactions="/src/controllers/api/interactions.php" data-default-phone="<?= e($defaultWhatsapp) ?>">
     <noscript>
       <div class="feed-status">
         <p>Pilchak necesita JavaScript para mostrar las publicaciones.</p>
@@ -138,6 +139,38 @@ $demoJson = json_encode($demoPosts, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS 
 
   <!-- Aviso temporal (confirmaciones y "próximamente") -->
   <div class="feed-toast" id="feedToast" role="status" aria-live="polite"></div>
+
+  <!-- Comentarios de una publicación (Bootstrap modal). La lista la llena assets/js/feed.js con la API
+       (src/controllers/api/interactions.php). Leer es público; escribir requiere sesión. -->
+  <div class="modal fade" id="commentsModal" tabindex="-1" aria-labelledby="commentsModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content join-modal">
+        <div class="modal-header border-0 pb-0">
+          <h2 class="h5 modal-title" id="commentsModalTitle">Comentarios</h2>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <p class="comments-status small mb-0" id="commentsStatus" role="status"></p>
+          <ul class="comments-list list-unstyled mb-0" id="commentsList" aria-live="polite"></ul>
+        </div>
+        <div class="modal-footer border-0 pt-0 comments-footer">
+          <?php if ($isAuth): ?>
+          <form id="commentForm" novalidate>
+            <div id="commentErrors" class="alert alert-danger py-2 small d-none" role="alert"></div>
+            <label for="commentInput" class="visually-hidden">Escribí un comentario</label>
+            <textarea class="form-control" id="commentInput" name="content" rows="2" maxlength="1000" placeholder="Escribí un comentario..." required></textarea>
+            <div class="comments-actions">
+              <span class="small publish-hint">Ctrl + Enter para enviar</span>
+              <button type="submit" class="btn btn-primary" id="commentSubmit">Enviar</button>
+            </div>
+          </form>
+          <?php else: ?>
+          <p class="small mb-0">Para comentar, <a href="/src/views/auth/login.php" data-auth-link>iniciá sesión o registrate</a>.</p>
+          <?php endif; ?>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <?php if (!$isAuth): ?>
   <!-- Popup (Bootstrap) para invitados: aparece al pasar de la 1.ª a la 2.ª publicación -->

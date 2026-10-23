@@ -79,8 +79,8 @@ CREATE TABLE IF NOT EXISTS post_tags (
     FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
 );
 
--- 6. Comentarios de las publicaciones. SOLO ESQUEMA: la interfaz tiene el botón "Comentar" (maquetado),
--- pero todavía no hay API ni lógica que lea o escriba en esta tabla.
+-- 6. Comentarios de las publicaciones. Los lee y escribe la API src/controllers/api/interactions.php
+-- (recurso "comments"), desde el botón "Comentar" del feed.
 CREATE TABLE IF NOT EXISTS comments (
     id         CHAR(36)      NOT NULL DEFAULT (UUID()),
     post_id    CHAR(36)      NOT NULL,
@@ -116,4 +116,17 @@ CREATE TABLE IF NOT EXISTS user_interests (
     PRIMARY KEY (user_id, category_id),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
+);
+
+-- 9. PUBLICACIONES GUARDADAS (bookmark). Una fila = un usuario guardó una publicación.
+-- La clave primaria (user_id, post_id) evita guardar dos veces lo mismo. La usa la API
+-- src/controllers/api/interactions.php (recurso "saves"). Misma definición que migrations/005.
+CREATE TABLE IF NOT EXISTS saved_posts (
+    user_id    CHAR(36)  NOT NULL,
+    post_id    CHAR(36)  NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, post_id),
+    KEY idx_saved_posts_post (post_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
 );

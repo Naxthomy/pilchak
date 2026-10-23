@@ -6,6 +6,7 @@
     --stitch: #818cf8;
     --like: #ff3b5c;
     --wsp: #25d366;
+    --save: #fbbf24;
     /* Ancho máximo de la columna del feed (en celular ocupa todo el ancho) */
     --feed-width: 500px;
     /* Altura aproximada de la barra inferior: la info y los botones de cada publicación se apoyan encima */
@@ -204,6 +205,11 @@
   .action-like.is-active .feed-icon {
     fill: var(--like);
     stroke: var(--like);
+    animation: pop .3s;
+  }
+  .action-save.is-active .feed-icon {
+    fill: var(--save);
+    stroke: var(--save);
     animation: pop .3s;
   }
   .action-wsp .feed-icon { fill: var(--wsp); stroke: none; }
@@ -444,7 +450,8 @@
     :root { --splash-hold: .6s; --splash-fade: .25s; }
     .splash-logo, .splash-stitch { animation: none; }
     .feed { scroll-behavior: auto; }
-    .action-like.is-active .feed-icon { animation: none; }
+    .action-like.is-active .feed-icon,
+    .action-save.is-active .feed-icon { animation: none; }
   }
   
   /* ---- Formulario de publicar: archivo elegido ---- */
@@ -458,4 +465,21 @@
   }
   .publish-file span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .publish-file .btn-link { color: #a5b4fc; flex: none; }
-  
+
+  /* ---- Comentarios (modal) ---- */
+  .comments-status { color: var(--text-muted); }
+  .comments-status:empty { display: none; }
+  .comments-list { display: flex; flex-direction: column; gap: 14px; }
+  .comment-head { display: flex; align-items: baseline; gap: 8px; }
+  .comment-author { font-size: 14px; font-weight: 600; color: var(--text-main); }
+  .comment-date { font-size: 12px; color: var(--text-muted); }
+  .comment-body {
+    margin: 2px 0 0;
+    font-size: 14px;
+    white-space: pre-wrap;        /* respeta los saltos de línea que escribió la persona */
+    overflow-wrap: anywhere;      /* una palabra larguísima no rompe el modal */
+  }
+  .comments-footer form { width: 100%; }
+  .comments-footer textarea { resize: none; }
+  .comments-footer textarea::placeholder { color: var(--text-muted); opacity: 1; }
+  .comments-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
