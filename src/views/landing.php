@@ -19,7 +19,9 @@ $defaultWhatsapp = '5491100000001';
 // PUBLICACIONES DE DEMOSTRACIÓN: se muestran a continuación de las publicaciones reales.
 // La API real no tiene medios ni precio; estos datos son de ejemplo y los teléfonos son de prueba.
 // Para quitar la demostración: borrar este arreglo y el .concat(readDemo()) de load() en assets/js/feed.js.
-$demoPosts = [
+// Para mostrar las publicaciones de prueba quitar el comentario
+
+/* $demoPosts = [
     ['id' => 1, 'type' => 'video', 'src' => 'https://cdn.pixabay.com/video/2023/03/09/153473-806066385_large.mp4',
      'seller' => '@modaurbana', 'desc' => 'Campera de jean oversize, casi sin uso.', 'price' => '$25.000', 'size' => 'M',  'phone' => '5491100000001'],
     ['id' => 2, 'type' => 'image', 'src' => 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?q=80&w=1200&auto=format&fit=crop',
@@ -28,7 +30,8 @@ $demoPosts = [
      'seller' => '@zapas_ba', 'desc' => 'Zapatillas urbanas talle 42, un solo uso.', 'price' => '$40.000', 'size' => '42', 'phone' => '5491100000003'],
     ['id' => 4, 'type' => 'image', 'src' => 'https://images.unsplash.com/photo-1534430480872-3498386e7856?q=80&w=1200&auto=format&fit=crop',
      'seller' => '@looks_mia', 'desc' => 'Conjunto deportivo, buen estado.', 'price' => '$22.000', 'size' => 'L',  'phone' => '5491100000004'],
-];
+]; */
+
 // JSON seguro para incrustar en <script type="application/json"> (escapa < > & ' ")
 $demoJson = json_encode($demoPosts, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE);
 ?>
