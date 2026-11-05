@@ -5,6 +5,8 @@ Arnés de pruebas de Pilchak (SIN PHP):
    construcciones que esas vistas usan; ante cualquier otra lanza error (no ignora nada en silencio).
  - Emula la API con el contrato de src/controllers/api/posts.php (NO ejecuta ese PHP): JSON y multipart,
    validación del archivo por CONTENIDO (como finfo), topes de tamaño y CSRF.
+ - Emula los me gusta: posts.php agrega likes_count y liked a cada post, e interactions.php?resource=likes
+   cuenta el total con el contrato real (STATE["likes"] = {id: {"others": me gusta de otros, "mine": ¿lo di yo?}}).
  - Login/registro/home/perfil son STUBS mínimos (no son los PHP reales).
 """
 import binascii, json, os, re, threading, time, uuid
@@ -23,7 +25,8 @@ UPLOAD_TYPES = {"image/jpeg": ("jpg", "image"), "image/png": ("png", "image"), "
 
 def reset_state():
     STATE.clear()
-    STATE.update(posts=[], api_mode="ok", post_delay=0.0, post_log=[], force=None, files={})
+    STATE.update(posts=[], api_mode="ok", post_delay=0.0, post_log=[], force=None, files={},
+                 likes={}, like_log=[], like_fail=False, like_bump=0)
 
 def sniff(data):
     """Tipo según el CONTENIDO del archivo (emula finfo), no según lo que informa el navegador."""
@@ -122,6 +125,11 @@ class H(BaseHTTPRequestHandler):
         if p == "/src/controllers/api/posts.php":
             if STATE["api_mode"] == "error": return self.send(500, "Error interno del servidor.", "text/plain")
             posts = STATE["posts"] if STATE["api_mode"] == "ok" else []
+            def with_likes(post):   # likes_count = de todos los usuarios; liked = solo si hay sesión
+                st = STATE["likes"].get(post["id"], {"others": 0, "mine": False})
+                mine = st["mine"] and ctx["auth"]
+                return dict(post, likes_count=st["others"] + (1 if mine else 0), liked=bool(mine))
+            posts = [with_likes(x) for x in posts]
             return self.send(200, json.dumps({"status": "success", "count": len(posts), "data": posts}), "application/json")
         if p in STATE["files"]:                                  # archivos "subidos" durante la prueba
             data, mime = STATE["files"][p]; return self.send(200, data, mime)
@@ -135,6 +143,20 @@ class H(BaseHTTPRequestHandler):
             nxt = parse_qs(raw.decode()).get("next", [""])[0]
             dest = {"publish": "/?publish=1", "profile": "/src/views/profile/index.php"}.get(nxt, "/")
             return self.send(302, "", headers={"Location": dest, "Set-Cookie": "auth=1; Path=/"})
+        if u.path == "/src/controllers/api/interactions.php" and parse_qs(u.query).get("resource") == ["likes"]:
+            J = lambda c, o: self.send(c, json.dumps(o, ensure_ascii=False), "application/json")
+            STATE["like_log"].append({"csrf": self.headers.get("X-CSRF-Token"), "body": raw.decode("utf-8", "replace")})
+            time.sleep(STATE["post_delay"])
+            if not ctx["auth"]: return J(401, {"status": "error", "message": "Autenticación requerida: iniciá sesión para continuar."})
+            if self.headers.get("X-CSRF-Token") != ctx["csrf"]: return J(403, {"status": "error", "message": "La solicitud no es válida o expiró. Recargá la página e intentá de nuevo."})
+            if STATE["like_fail"]: return J(500, {"status": "error", "message": "Error interno del servidor."})
+            d = json.loads(raw); pid = d.get("post_id")
+            if not any(x["id"] == pid for x in STATE["posts"]): return J(404, {"status": "error", "message": "La publicación no existe."})
+            if not isinstance(d.get("liked"), bool): return J(422, {"status": "error", "message": "Datos inválidos.", "errors": ["El campo liked debe ser true o false."]})
+            st = STATE["likes"].setdefault(pid, {"others": 0, "mine": False})
+            st["mine"] = d["liked"]                      # idempotente: pedir lo mismo dos veces no cambia nada
+            st["others"] += STATE["like_bump"]           # otros usuarios pudieron dar me gusta mientras tanto
+            return J(200, {"status": "success", "data": {"post_id": pid, "liked": st["mine"], "likes_count": st["others"] + (1 if st["mine"] else 0)}})
         if u.path == "/src/controllers/api/posts.php":
             ct = self.headers.get("Content-Type") or ""
             multipart = ct.lower().startswith("multipart/form-data")

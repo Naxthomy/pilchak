@@ -1,15 +1,18 @@
 // Feed de Pilchak: pide las publicaciones a la API, las dibuja y gestiona autoplay/pausa de videos,
-// "me gusta" (local), comentarios, guardados (bookmark) y navegación con teclado.
+// "me gusta" (en la base de datos, con el total de todos los usuarios), comentarios, guardados (bookmark)
+// y navegación con teclado.
 //
 // API usada: GET /src/controllers/api/posts.php  ->  { status, count, data: [ {id, title, content, phone,
 //            media_type, media_url, created_at, updated_at, user_id, user_name} ] }
 //            phone: WhatsApp opcional, solo dígitos, o null.   media_type: 'image' | 'video' | null.
 //            media_url: ruta pública del archivo (/assets/img/uploads/<usuario>/post_<UUID>.<ext>) o null.
+//            likes_count: total de "me gusta" de la publicación (todos los usuarios).   liked: true si YO ya le di me gusta.
 // API de interacciones: /src/controllers/api/interactions.php (data-api-interactions en #feed)
 //            GET  ?resource=comments&post_id=ID  -> { data: [ {id, content, created_at, user_id, user_name} ] }
 //            POST ?resource=comments  {post_id, content}  -> 201 { data: {comentario} }
 //            GET  ?resource=saves                        -> { data: [ids guardados por el usuario] }
 //            POST ?resource=saves     {post_id, saved}   -> { data: {post_id, saved} }   (saved: true | false)
+//            POST ?resource=likes     {post_id, liked}   -> { data: {post_id, liked, likes_count} }   (liked: true | false)
 //            Los POST llevan la cabecera X-CSRF-Token (de <meta name="csrf-token">, que solo existe con sesión).
 // Todo lo que viene del servidor se escribe con textContent / atributos (nunca innerHTML): no hay XSS.
 (function () {
@@ -25,7 +28,7 @@
   var CSRF_TOKEN = csrfMeta ? csrfMeta.getAttribute('content') : '';
   var COMMENT_MAX = 1000;            // mismo tope que la API y la columna comments.content
   var DEFAULT_PHONE = String(feed.dataset.defaultPhone || '');   // número general de WhatsApp (ver landing.php)
-  var LIKES_KEY = 'pilchak_likes';   // ids con "me gusta" (localStorage, solo en este navegador: la API no tiene likes)
+  var OLD_LIKES_KEY = 'pilchak_likes';   // clave que usaba la versión vieja (likes solo en este navegador); se limpia abajo
   var SVG_NS    = 'http://www.w3.org/2000/svg';
   var Pilchak   = window.Pilchak = window.Pilchak || {};
 
@@ -52,7 +55,7 @@
   }
 
   // ---------- Datos: normalización ----------
-  // Forma común: { id, kind: 'video'|'image'|'text', src, seller, title, desc, price, size, phone, date, demo }
+  // Forma común: { id, kind: 'video'|'image'|'text', src, seller, title, desc, price, size, phone, date, likes, liked, demo }
   function formatDate(value) {
     var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || ''));
     return m ? m[3] + '/' + m[2] + '/' + m[1] : '';
@@ -87,7 +90,9 @@
       title: String(p.title || ''),
       desc: String(p.content || ''),
       phone: p.phone ? String(p.phone) : '',
-      date: formatDate(p.created_at)
+      date: formatDate(p.created_at),
+      likes: Math.max(0, parseInt(p.likes_count, 10) || 0),   // total de me gusta (todos los usuarios)
+      liked: p.liked === true                                 // ¿ya le di me gusta yo?
     };
   }
 
@@ -105,6 +110,8 @@
       price: String(d.price || ''),
       size: String(d.size || ''),
       phone: String(d.phone || ''),
+      likes: 0,
+      liked: false,
       demo: true
     };
   }
@@ -163,6 +170,7 @@
     section.dataset.postId = p.id;
     section.dataset.seller = p.seller;
     if (p.demo) { section.dataset.demo = '1'; }
+    rememberLike(p.id, p.liked, p.likes);   // estado inicial que mandó el servidor (paintLike lo dibuja en finish())
 
     section.appendChild(buildMedia(p, isFirst));
 
@@ -196,7 +204,7 @@
     like.setAttribute('aria-pressed', 'false');
     like.setAttribute('aria-label', 'Me gusta');
     like.appendChild(icon('i-heart'));
-    like.appendChild(el('span', 'action-label', 'Me gusta'));
+    like.appendChild(el('span', 'action-label', '0'));   // paintLike() escribe el total real
     actions.appendChild(like);
 
     // Comentarios: el listener del feed (más abajo) abre el modal #commentsModal con data-action="comment".
@@ -256,32 +264,7 @@
     media.addEventListener('error', done, { once: true });   // si falla, que no gire para siempre
   }
 
-  // ---------- Me gusta (se guarda en el navegador) ----------
-  var likes = {};   // { idPublicacion: true }
-  try {
-    var saved = JSON.parse(window.localStorage.getItem(LIKES_KEY) || '[]');
-    if (Array.isArray(saved)) { saved.forEach(function (id) { likes[String(id)] = true; }); }
-  } catch (e) { /* storage bloqueado o JSON inválido: se empieza sin likes */ }
-
-  function saveLikes() {
-    try { window.localStorage.setItem(LIKES_KEY, JSON.stringify(Object.keys(likes))); } catch (e) { /* sin persistencia */ }
-  }
-
-  function paintLike(post) {
-    var btn = post.querySelector('.action-like');
-    if (!btn) { return; }
-    var on = likes[post.dataset.postId] === true;
-    btn.classList.toggle('is-active', on);
-    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-    btn.querySelector('.action-label').textContent = on ? '1' : 'Me gusta';
-  }
-
-  function setLike(post, on) {
-    if (on) { likes[post.dataset.postId] = true; } else { delete likes[post.dataset.postId]; }
-    paintLike(post);
-    saveLikes();
-  }
-
+  // ---------- Me gusta: efecto visual del doble toque ----------
   function burst(post) {
     var heart = post.querySelector('.like-burst');
     if (!heart) { return; }
@@ -369,6 +352,69 @@
       .then(function () { notify(want ? 'Publicación guardada' : 'Quitada de guardados'); })
       .catch(function (err) { setSaved(id, !want); notify(errorMessages(err)[0]); })
       .then(function () { delete savePending[id]; });
+  }
+
+  // ---------- Me gusta (se guardan en la base de datos; el total suma a todos los usuarios) ----------
+  // El servidor es la fuente de la verdad: manda likes_count y liked con cada publicación y, al dar o quitar
+  // un me gusta, devuelve el total actualizado. Una misma persona no puede sumar dos veces (lo impide la base).
+  var likedPosts = {};    // { idPublicacion: true }: publicaciones a las que YO les di me gusta
+  var likeCounts = {};    // { idPublicacion: número }: total de me gusta de cada publicación
+  var likePending = {};   // { idPublicacion: true }: pedido en curso (evita dobles clics)
+
+  // La versión vieja guardaba los me gusta en el navegador; esos datos ya no se usan, se borran.
+  try { window.localStorage.removeItem(OLD_LIKES_KEY); } catch (e) { /* storage bloqueado: no pasa nada */ }
+
+  // 1200 -> "1,2 mil": que un total grande no desarme la columna de botones.
+  function formatCount(n) {
+    if (n < 1000) { return String(n); }
+    if (n < 1000000) { return (Math.floor(n / 100) / 10).toString().replace('.', ',') + ' mil'; }
+    return (Math.floor(n / 100000) / 10).toString().replace('.', ',') + ' M';
+  }
+
+  // Guarda el estado de una publicación en memoria (todavía sin dibujarlo).
+  function rememberLike(id, on, count) {
+    if (on) { likedPosts[id] = true; } else { delete likedPosts[id]; }
+    likeCounts[id] = count;
+  }
+
+  function paintLike(post) {
+    var btn = post.querySelector('.action-like');
+    if (!btn) { return; }
+    var id = post.dataset.postId;
+    var on = likedPosts[id] === true;
+    var count = likeCounts[id] || 0;
+    btn.classList.toggle('is-active', on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.setAttribute('aria-label', (on ? 'Quitar me gusta' : 'Dar me gusta') + ' (' + count + ' en total)');
+    btn.querySelector('.action-label').textContent = formatCount(count);
+  }
+
+  // Cambia el estado de una publicación y repinta todas las tarjetas con ese id.
+  function setLikeState(id, on, count) {
+    rememberLike(id, on, count);
+    feed.querySelectorAll('.post').forEach(function (post) {
+      if (post.dataset.postId === id) { paintLike(post); }
+    });
+  }
+
+  // Da (want = true) o quita (want = false) mi me gusta. Cambia el número YA (optimista), avisa al servidor y
+  // después deja el total que este devuelve; si falla, vuelve atrás. Devuelve true si el me gusta quedó (o ya
+  // estaba) como se pidió, y false si no se pudo (invitado, demostración o pedido en curso).
+  function setLike(post, want) {
+    var id = post.dataset.postId;
+    if (post.dataset.demo) { notify('Las publicaciones de demostración no se pueden marcar con me gusta'); return false; }
+    if (!IS_AUTH) { notify('Iniciá sesión para dar me gusta'); return false; }
+    if (likePending[id]) { return false; }
+    if ((likedPosts[id] === true) === want) { return true; }   // ya estaba así: no hay nada que pedir
+
+    var prevCount = likeCounts[id] || 0;
+    likePending[id] = true;
+    setLikeState(id, want, Math.max(0, prevCount + (want ? 1 : -1)));
+    interactionsRequest('likes', 'POST', '', { post_id: id, liked: want })
+      .then(function (json) { setLikeState(id, json.data.liked === true, Math.max(0, parseInt(json.data.likes_count, 10) || 0)); })
+      .catch(function (err) { setLikeState(id, !want, prevCount); notify(errorMessages(err)[0]); })
+      .then(function () { delete likePending[id]; });
+    return true;
   }
 
   // ---------- Comentarios (modal) ----------
@@ -598,7 +644,7 @@
     if (!post) { return; }
 
     if (btn.dataset.action === 'like') {
-      setLike(post, likes[post.dataset.postId] !== true);
+      setLike(post, likedPosts[post.dataset.postId] !== true);
     } else if (btn.dataset.action === 'comment') {
       openComments(post);
     } else if (btn.dataset.action === 'save') {
@@ -612,8 +658,7 @@
     if (ev.target.closest('a, button')) { return; }   // doble clic sobre un botón no es "doble toque"
     var post = ev.target.closest('.post');
     if (!post) { return; }
-    setLike(post, true);
-    burst(post);
+    if (setLike(post, true)) { burst(post); }   // el corazón grande solo si el me gusta quedó dado
   });
 
   // Teclado (PC): flechas / RePág / AvPág cambian de publicación. Con scroll-snap mandatory, el scroll

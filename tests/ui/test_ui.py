@@ -83,7 +83,7 @@ with sync_playwright() as pw:
     from urllib.parse import urlparse as _u, parse_qs as _q, unquote as _uq
     msg = _q(_u(w[0]["href"]).query)["text"][0] if w[0] else ""
     check("1.12 WhatsApp: abre wa.me/<número> en pestaña nueva con noopener y mensaje con el título", w[0] and w[0]["href"].startswith("https://wa.me/5491123456789?text=") and w[0]["target"] == "_blank" and "noopener" in w[0]["rel"] and "Campera de jean" in msg and "undefined" not in msg and "()" not in msg, (w[0], msg))
-    check("1.12b los likes siguen siendo locales", p.evaluate("!!document.querySelector('.action-like')"))
+    check("1.12b el botón «Me gusta» existe y muestra el total de la publicación (0 si nadie le dio me gusta)", p.evaluate("[...document.querySelectorAll('.post')].every(s=>s.querySelector('.action-like .action-label').textContent==='0')"))
     # ---- Botón de comentarios (abre el modal; ver también el bookmark) ----
     cm = p.evaluate("""[...document.querySelectorAll('.post')].map(s=>{
         const acts=[...s.querySelector('.post-actions').children].map(n=>n.classList.contains('post-avatar')?'avatar':[...n.classList].find(c=>/^action-(like|comment|save|wsp)$/.test(c)));
@@ -369,6 +369,65 @@ with sync_playwright() as pw:
     check("9.18 las publicaciones reales con foto/video muestran título + descripción y WhatsApp", heads == "Con foto|Con video" and p.evaluate("document.querySelectorAll('.post')[0].querySelectorAll('.action-wsp').length") == 1, heads)
     p.wait_for_timeout(500)
     check("9.19 si el archivo no carga (404) no queda un spinner colgado", p.evaluate("document.querySelectorAll('.post-spinner').length") <= 4)
+    c.close()
+
+    print("\n=== 10. ME GUSTA: se guardan en la base de datos y el total suma a todos los usuarios ===")
+    LK = lambda pg, i: pg.evaluate("i=>{const b=document.querySelectorAll('.post')[i].querySelector('.action-like');return {n:b.querySelector('.action-label').textContent,on:b.classList.contains('is-active'),pressed:b.getAttribute('aria-pressed'),aria:b.getAttribute('aria-label')}}", i)
+    clk = lambda pg, i: pg.evaluate("i=>document.querySelectorAll('.post')[i].querySelector('.action-like').click()", i)
+    toast = lambda pg: pg.evaluate("document.getElementById('feedToast').textContent")
+    ids = [x["id"] for x in REAL]
+
+    harness.reset_state(); harness.STATE["posts"] = [dict(x) for x in REAL]
+    harness.STATE["likes"] = {ids[0]: {"others": 5, "mine": True}}      # un invitado no tiene «mío»: solo ve el total
+    c = ctx_for(br); p = new_page(c); open_feed(p)
+    a = LK(p, 0)
+    check("10.1 invitado: ve el total real (5) y el corazón sin marcar", a["n"] == "5" and not a["on"] and a["pressed"] == "false", a)
+    clk(p, 0); p.wait_for_timeout(300)
+    check("10.2 invitado: al tocar «Me gusta» se le pide iniciar sesión, no se manda ningún pedido y el total no cambia",
+          "Iniciá sesión" in toast(p) and harness.STATE["like_log"] == [] and LK(p, 0)["n"] == "5", toast(p))
+    c.close()
+
+    harness.reset_state(); harness.STATE["posts"] = [dict(x) for x in REAL]
+    harness.STATE["likes"] = {ids[0]: {"others": 5, "mine": False}, ids[1]: {"others": 2, "mine": True}, ids[2]: {"others": 1250, "mine": False}}
+    c = ctx_for(br, auth=True); p = new_page(c); open_feed(p)
+    a0, a1, a2 = LK(p, 0), LK(p, 1), LK(p, 2)
+    check("10.3 con sesión: cada tarjeta trae su total y MI estado desde el servidor (5 sin marcar; 3 marcado = 2 de otros + el mío; 1250 → «1,2 mil»)",
+          (a0["n"], a0["on"]) == ("5", False) and (a1["n"], a1["on"], a1["pressed"]) == ("3", True, "true") and a2["n"] == "1,2 mil", [a0, a1, a2])
+    harness.STATE["post_delay"] = 0.4
+    clk(p, 0); mid = LK(p, 0)
+    check("10.4 al tocar, el número sube y el corazón se marca YA (sin esperar al servidor)", mid["n"] == "6" and mid["on"], mid)
+    p.evaluate("(()=>{const b=document.querySelectorAll('.post')[0].querySelector('.action-like');b.click();b.click();})()")   # clics apurados mientras el pedido sigue en curso
+    p.wait_for_timeout(900); harness.STATE["post_delay"] = 0.0
+    lg = harness.STATE["like_log"]
+    check("10.5 un solo pedido al servidor (los clics repetidos mientras espera no suman ni restan) con post_id, liked=true y el token CSRF",
+          len(lg) == 1 and json.loads(lg[0]["body"]) == {"post_id": ids[0], "liked": True} and lg[0]["csrf"] == "tok-s1" and LK(p, 0)["n"] == "6", lg)
+    p.reload(); open_feed(p); a = LK(p, 0)
+    check("10.6 al recargar la página el me gusta SIGUE ahí (viene de la base de datos): 6 y marcado", a["n"] == "6" and a["on"] and "Quitar" in a["aria"], a)
+    clk(p, 0); p.wait_for_timeout(300); a = LK(p, 0)
+    check("10.7 quitar el me gusta: el total baja a 5 y el corazón se desmarca", a["n"] == "5" and not a["on"] and json.loads(harness.STATE["like_log"][-1]["body"])["liked"] is False, a)
+    p.reload(); open_feed(p); a = LK(p, 0)
+    check("10.8 recargar después de quitarlo: 5 y sin marcar", a["n"] == "5" and not a["on"], a)
+    harness.STATE["like_bump"] = 3        # mientras tanto, 3 personas más le dieron me gusta a la publicación 3
+    clk(p, 2); p.wait_for_timeout(300)
+    check("10.9 el total que manda el servidor manda sobre el cálculo local (el navegador esperaba 1251; con los 3 de otros + el mío son 1254)", "(1254 en total)" in LK(p, 2)["aria"] and LK(p, 2)["on"], LK(p, 2))
+    harness.STATE["like_bump"] = 0; harness.STATE["like_fail"] = True; n_before = len(harness.STATE["like_log"])
+    clk(p, 0); p.wait_for_timeout(300); a = LK(p, 0)
+    check("10.10 si el servidor falla, el número y el corazón vuelven atrás y se avisa", len(harness.STATE["like_log"]) == n_before + 1 and a["n"] == "5" and not a["on"] and "Error interno" in toast(p), [a, toast(p)])
+    harness.STATE["like_fail"] = False; n_before = len(harness.STATE["like_log"])
+    clk(p, 3); p.wait_for_timeout(300)
+    check("10.11 las publicaciones de demostración no se pueden marcar: aviso y ningún pedido", len(harness.STATE["like_log"]) == n_before and "demostración" in toast(p) and LK(p, 3)["n"] == "0", toast(p))
+    p.evaluate("localStorage.setItem('pilchak_likes', '[\"x\"]')"); p.reload(); open_feed(p)
+    check("10.12 los me gusta viejos guardados en el navegador se borran (ya no se usan)", p.evaluate("localStorage.getItem('pilchak_likes')") is None)
+    check("10.13 sin errores de JavaScript en toda la sección", p.errors == [], p.errors)
+    c.close()
+
+    harness.reset_state(); harness.STATE["posts"] = [dict(x) for x in REAL]; harness.STATE["likes"] = {ids[0]: {"others": 4, "mine": False}}
+    c = ctx_for(br, auth=True); p = new_page(c); open_feed(p)
+    dbl = "i=>document.querySelectorAll('.post')[i].querySelector('.post-text').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}))"
+    p.evaluate(dbl, 0); p.wait_for_timeout(300)
+    check("10.14 doble toque sobre la publicación da me gusta (4 → 5), con corazón grande", LK(p, 0)["n"] == "5" and LK(p, 0)["on"] and p.evaluate("document.querySelector('.like-burst').classList.contains('is-playing')"))
+    p.evaluate(dbl, 0); p.wait_for_timeout(300)
+    check("10.15 otro doble toque NO suma otro me gusta (una persona, un me gusta): sigue en 5 y no se manda otro pedido", LK(p, 0)["n"] == "5" and len(harness.STATE["like_log"]) == 1, harness.STATE["like_log"])
     c.close()
     br.close()
 

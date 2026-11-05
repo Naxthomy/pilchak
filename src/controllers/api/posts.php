@@ -17,8 +17,13 @@ declare(strict_types=1);
  *   éxito  -> { "status": "success", "count": N, "data": [...] }      (GET)
  *             { "status": "success", "data": { ...post... } }          (POST)
  *   error  -> { "status": "error", "message": "...", "errors": [...] }
- *   post   -> { id, title, content, phone, media_type, media_url, created_at, updated_at, user_id, user_name }
+ *   post   -> { id, title, content, phone, media_type, media_url, created_at, updated_at, user_id, user_name,
+ *               likes_count, liked }
  *             media_type: 'image' | 'video' | null     media_url: '/assets/img/uploads/...' | null
+ *             likes_count: total de "me gusta" de la publicación (de todos los usuarios), contado en la base.
+ *             liked: true si el usuario de la sesión ya le dio me gusta (siempre false para un invitado).
+ *             Los me gusta se dan y se quitan en interactions.php (recurso "likes"); requiere la tabla post_likes
+ *             (migrations/006). Sin esa tabla el GET sigue funcionando: likes_count = 0 y liked = false.
  *
  * Campos opcionales:
  *   - phone: WhatsApp de contacto, se guarda solo con dígitos (8 a 15, con código de país).
@@ -188,6 +193,54 @@ function apiHasColumn(PDO $pdo, string $column): bool
     return $cache[$column];
 }
 
+/** ¿Existe la tabla post_likes? (migración 006; se consulta una vez por petición). */
+function apiHasLikesTable(PDO $pdo): bool
+{
+    static $exists = null;
+
+    if ($exists === null) {
+        $exists = $pdo->query("SHOW TABLES LIKE 'post_likes'")->fetch() !== false;
+        if (!$exists) {
+            error_log('[API posts] Falta la tabla post_likes: aplicar migrations/006_add_post_likes_table.sql');
+        }
+    }
+
+    return $exists;
+}
+
+/**
+ * Agrega a cada post su total de me gusta (likes_count) y si el usuario de la sesión ya le dio me gusta (liked).
+ * Usa 2 consultas para TODOS los posts juntos (no una por post). Los ids vienen de la base y van como parámetros.
+ */
+function apiAttachLikes(PDO $pdo, array $posts): array
+{
+    $totals = [];
+    $mine   = [];
+
+    if ($posts && apiHasLikesTable($pdo)) {
+        $ids   = array_column($posts, 'id');
+        $marks = implode(', ', array_fill(0, count($ids), '?'));
+
+        // Total de cada post: la cantidad de filas de post_likes con su post_id
+        $stmt = $pdo->prepare("SELECT post_id, COUNT(*) FROM post_likes WHERE post_id IN ($marks) GROUP BY post_id");
+        $stmt->execute($ids);
+        $totals = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
+        // Cuáles de esos posts le gustan al usuario de la sesión (un invitado no tiene ninguno)
+        if (is_authenticated()) {
+            $stmt = $pdo->prepare("SELECT post_id FROM post_likes WHERE user_id = ? AND post_id IN ($marks)");
+            $stmt->execute(array_merge([current_user()['id']], $ids));
+            $mine = array_flip($stmt->fetchAll(PDO::FETCH_COLUMN));
+        }
+    }
+
+    return array_map(static function (array $post) use ($totals, $mine): array {
+        $post['likes_count'] = (int) ($totals[$post['id']] ?? 0);
+        $post['liked']       = isset($mine[$post['id']]);
+        return $post;
+    }, $posts);
+}
+
 /** Lista de columnas de un post (constante: no incluye datos del usuario). */
 function apiPostColumns(PDO $pdo): string
 {
@@ -223,7 +276,7 @@ function apiFindPost(PDO $pdo, string $id): ?array
     $stmt->execute(['id' => $id]);
     $post = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    return $post === false ? null : apiShapePost($post);
+    return $post === false ? null : apiAttachLikes($pdo, [apiShapePost($post)])[0];
 }
 
 /* ===================== Controlador ===================== */
@@ -248,7 +301,10 @@ try {
                 ORDER BY p.created_at DESC
                 LIMIT ' . API_LIST_LIMIT . '
             ');
-            $posts = array_map('apiShapePost', $stmt->fetchAll(PDO::FETCH_ASSOC));
+            $posts = apiAttachLikes($pdo, array_map('apiShapePost', $stmt->fetchAll(PDO::FETCH_ASSOC)));
+
+            // "liked" depende de quién pide el listado: que ningún navegador ni proxy lo guarde en caché
+            header('Cache-Control: no-store');
 
             apiResponse(200, [
                 'status' => 'success',

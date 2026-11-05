@@ -130,3 +130,18 @@ CREATE TABLE IF NOT EXISTS saved_posts (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
 );
+
+
+-- 10. ME GUSTA DE LAS PUBLICACIONES. Una fila = un usuario le dio me gusta a una publicación.
+-- La clave primaria (user_id, post_id) impide sumar dos me gusta a la misma publicación. El total se calcula
+-- con COUNT sobre post_id. La usa src/controllers/api/interactions.php (recurso "likes") y la lee posts.php.
+-- Misma definición que migrations/006.
+CREATE TABLE IF NOT EXISTS post_likes (
+    user_id    CHAR(36)  NOT NULL,
+    post_id    CHAR(36)  NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, post_id),
+    KEY idx_post_likes_post (post_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
+);

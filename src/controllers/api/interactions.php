@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /**
- * API de interacciones — Pilchak: comentarios y publicaciones guardadas (bookmark).
+ * API de interacciones — Pilchak: comentarios, publicaciones guardadas (bookmark) y "me gusta".
  *
  * El recurso se elige con ?resource=...:
  *
@@ -15,6 +15,12 @@ declare(strict_types=1);
  *        cuerpo JSON: { "post_id": "<uuid>", "saved": true | false }
  *        Es IDEMPOTENTE: "saved: true" dos veces deja la publicación guardada una sola vez
  *        (no es un "toggle", así un doble clic o un reintento no invierten el estado).
+ *   POST ?resource=likes                     -> da o quita el "me gusta" del usuario a una publicación (200)
+ *        cuerpo JSON: { "post_id": "<uuid>", "liked": true | false }
+ *        Responde { post_id, liked, likes_count }: likes_count es el TOTAL real (de todos los usuarios),
+ *        contado en la base en este momento. También es IDEMPOTENTE, y la clave primaria
+ *        (user_id, post_id) de post_likes impide que una misma persona sume dos me gusta a una publicación.
+ *        El listado de publicaciones trae likes_count y liked en posts.php (no hay GET de likes).
  *
  * Contrato (igual que posts.php):
  *   éxito -> { "status": "success", "data": ... }      (los listados agregan "count")
@@ -28,7 +34,7 @@ declare(strict_types=1);
  *   - Todas las consultas usan parámetros (PDO preparado): no hay SQL armado con datos del usuario.
  *   - El texto se devuelve tal cual (JSON); quien lo dibuja (feed.js) usa textContent, así no hay XSS.
  *
- * Requiere las tablas comments (migración 004) y saved_posts (migración 005).
+ * Requiere las tablas comments (migración 004), saved_posts (migración 005) y post_likes (migración 006).
  * Compatible con PHP 7.4+.
  */
 
@@ -252,6 +258,63 @@ function apiSetSaved(PDO $pdo): void
     apiResponse(200, ['status' => 'success', 'data' => ['post_id' => $postId, 'saved' => $saved]]);
 }
 
+/* ===================== Me gusta ===================== */
+
+/** ¿El usuario ya le dio me gusta a esta publicación? */
+function apiIsLiked(PDO $pdo, string $userId, string $postId): bool
+{
+    $stmt = $pdo->prepare('SELECT 1 FROM post_likes WHERE user_id = :user_id AND post_id = :post_id');
+    $stmt->execute(['user_id' => $userId, 'post_id' => $postId]);
+
+    return $stmt->fetchColumn() !== false;
+}
+
+/** Total de me gusta de una publicación (de todos los usuarios), contado en la base de datos. */
+function apiCountLikes(PDO $pdo, string $postId): int
+{
+    $stmt = $pdo->prepare('SELECT COUNT(*) FROM post_likes WHERE post_id = :post_id');
+    $stmt->execute(['post_id' => $postId]);
+
+    return (int) $stmt->fetchColumn();
+}
+
+/** POST likes: deja el me gusta del usuario en el estado pedido y devuelve el total actualizado. */
+function apiSetLiked(PDO $pdo): void
+{
+    $input  = apiReadAuthenticatedPost();
+    $postId = apiRequirePostId($pdo, $input['post_id'] ?? null);
+
+    if (!is_bool($input['liked'] ?? null)) {
+        apiError(422, 'Datos inválidos.', ['El campo liked debe ser true o false.']);
+    }
+    $liked  = $input['liked'];
+    $userId = current_user()['id'];   // el dueño del me gusta sale de la sesión, nunca del cuerpo
+
+    if ($liked) {
+        if (!apiIsLiked($pdo, $userId, $postId)) {
+            try {
+                $stmt = $pdo->prepare('INSERT INTO post_likes (user_id, post_id) VALUES (:user_id, :post_id)');
+                $stmt->execute(['user_id' => $userId, 'post_id' => $postId]);
+            } catch (PDOException $e) {
+                // Dos pedidos simultáneos pueden intentar insertar la misma fila: el segundo choca con la
+                // clave primaria. Si la fila quedó guardada, el resultado es el buscado; si no, es otro error.
+                if (!apiIsLiked($pdo, $userId, $postId)) {
+                    throw $e;
+                }
+            }
+        }
+    } else {
+        $stmt = $pdo->prepare('DELETE FROM post_likes WHERE user_id = :user_id AND post_id = :post_id');
+        $stmt->execute(['user_id' => $userId, 'post_id' => $postId]);
+    }
+
+    apiResponse(200, ['status' => 'success', 'data' => [
+        'post_id'     => $postId,
+        'liked'       => $liked,
+        'likes_count' => apiCountLikes($pdo, $postId),
+    ]]);
+}
+
 /* ===================== Controlador ===================== */
 
 try {
@@ -262,21 +325,26 @@ try {
     $method   = $_SERVER['REQUEST_METHOD'];
     $resource = is_string($_GET['resource'] ?? null) ? $_GET['resource'] : '';
 
-    if ($resource !== 'comments' && $resource !== 'saves') {
-        apiError(400, 'El parámetro resource debe ser "comments" o "saves".');
+    if (!in_array($resource, ['comments', 'saves', 'likes'], true)) {
+        apiError(400, 'El parámetro resource debe ser "comments", "saves" o "likes".');
     }
 
     if ($method === 'GET') {
         if ($resource === 'comments') {
             apiListComments($pdo);
-        } else {
+        } elseif ($resource === 'saves') {
             apiListSaves($pdo);
+        } else {
+            header('Allow: POST');
+            apiError(405, 'El recurso likes solo admite POST; los totales vienen en el listado de posts.php.');
         }
     } elseif ($method === 'POST') {
         if ($resource === 'comments') {
             apiCreateComment($pdo);
-        } else {
+        } elseif ($resource === 'saves') {
             apiSetSaved($pdo);
+        } else {
+            apiSetLiked($pdo);
         }
     } else {
         header('Allow: GET, POST');
@@ -286,9 +354,9 @@ try {
 } catch (PDOException $e) {
     error_log('[API interactions] PDOException: ' . $e->getMessage());
 
-    // 42S02 = tabla inexistente: falta aplicar la migración 004 (comments) o la 005 (saved_posts)
+    // 42S02 = tabla inexistente: falta aplicar la migración 004 (comments), 005 (saved_posts) o 006 (post_likes)
     if ($e->getCode() === '42S02') {
-        apiError(500, 'Falta una tabla en la base de datos (migraciones 004 y 005). Avisá al administrador.');
+        apiError(500, 'Falta una tabla en la base de datos (migraciones 004, 005 y 006). Avisá al administrador.');
     }
     // 23000 = violación de integridad (p. ej. el user_id de la sesión no existe en users)
     if ($e->getCode() === '23000') {
