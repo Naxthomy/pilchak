@@ -6,6 +6,7 @@
 //            media_type, media_url, created_at, updated_at, user_id, user_name} ] }
 //            phone: WhatsApp opcional, solo dígitos, o null.   media_type: 'image' | 'video' | null.
 //            media_url: ruta pública del archivo (/assets/img/uploads/<usuario>/post_<UUID>.<ext>) o null.
+//            price: precio como texto decimal ("15000.00"; null en publicaciones viejas).   size: talla o número ("M", "42").
 //            likes_count: total de "me gusta" de la publicación (todos los usuarios).   liked: true si YO ya le di me gusta.
 // API de interacciones: /src/controllers/api/interactions.php (data-api-interactions en #feed)
 //            GET  ?resource=comments&post_id=ID  -> { data: [ {id, content, created_at, user_id, user_name} ] }
@@ -80,6 +81,16 @@
     return null;
   }
 
+  // 15000 -> "$15.000"; 1500.5 -> "$1.500,50". '' si no hay precio válido (publicaciones viejas).
+  function formatPrice(value) {
+    var n = Number(value);
+    if (value === null || value === '' || !isFinite(n) || n <= 0) { return ''; }
+    var total = Math.round(n * 100);                 // en centavos, para no arrastrar errores de decimales
+    var cents = total % 100;
+    var whole = String(Math.floor(total / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');   // puntos de miles
+    return '$' + whole + (cents ? ',' + (cents < 10 ? '0' : '') + cents : '');
+  }
+
   function fromApi(p) {
     var media = apiMedia(p);
     return {
@@ -90,6 +101,8 @@
       title: String(p.title || ''),
       desc: String(p.content || ''),
       phone: p.phone ? String(p.phone) : '',
+      price: formatPrice(p.price),   // ya formateado: "$15.000"
+      size: p.size ? String(p.size) : '',
       date: formatDate(p.created_at),
       likes: Math.max(0, parseInt(p.likes_count, 10) || 0),   // total de me gusta (todos los usuarios)
       liked: p.liked === true                                 // ¿ya le di me gusta yo?
@@ -181,9 +194,14 @@
       info.appendChild(el('p', 'post-desc', p.desc));
     }
     if (p.price || p.size) {
-      var line = el('div');
-      if (p.price) { line.appendChild(el('span', 'post-price', p.price)); }
-      if (p.size) { line.appendChild(el('span', 'post-size', 'Talle ' + p.size)); }
+      var line = el('div', 'post-deal');
+      if (p.price) {
+        var price = el('span', 'post-price');
+        price.appendChild(el('span', 'post-label', 'Precio: '));
+        price.appendChild(document.createTextNode(p.price));
+        line.appendChild(price);
+      }
+      if (p.size) { line.appendChild(el('span', 'post-size', 'Talla: ' + p.size)); }
       info.appendChild(line);
     }
     if (p.date) { info.appendChild(el('div', 'post-date', p.date)); }

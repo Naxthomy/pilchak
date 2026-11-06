@@ -209,6 +209,17 @@ $demoJson = json_encode($demoPosts, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS 
               <label for="publishContent" class="form-label">Descripción</label>
               <textarea class="form-control" id="publishContent" name="content" rows="5" maxlength="10000" required></textarea>
             </div>
+            <div class="row g-3 mb-1">
+              <div class="col-7">
+                <label for="publishPrice" class="form-label">Precio ($)</label>
+                <input type="text" inputmode="decimal" class="form-control" id="publishPrice" name="price" maxlength="14" required autocomplete="off" placeholder="Ej: 15000">
+              </div>
+              <div class="col-5">
+                <label for="publishSize" class="form-label">Talla o número</label>
+                <input type="text" class="form-control" id="publishSize" name="size" maxlength="20" required autocomplete="off" placeholder="Ej: M o 42">
+              </div>
+            </div>
+            <p class="small publish-hint mb-3">El precio y la talla son obligatorios y se muestran en tu publicación.</p>
             <div class="mb-3">
               <label for="publishMedia" class="form-label">Foto o video <span class="publish-hint">(opcional)</span></label>
               <input type="file" class="form-control" id="publishMedia" name="media" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm">

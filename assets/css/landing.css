@@ -157,6 +157,7 @@
   .post-seller { font-weight: 700; font-size: 16px; }
   .post-desc { margin: 4px 0 8px; font-size: 14px; line-height: 1.35; }
   .post-price { font-size: 20px; font-weight: 800; }
+  .post-label { font-size: 13px; font-weight: 600; opacity: .85; }   /* "Precio:" / "Talla:" */
   .post-size {
     display: inline-block;
     margin-left: 8px;
@@ -482,4 +483,4 @@
   .comments-footer form { width: 100%; }
   .comments-footer textarea { resize: none; }
   .comments-footer textarea::placeholder { color: var(--text-muted); opacity: 1; }
-  .comments-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
+  .comments-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }

@@ -39,6 +39,17 @@ try {
         $stmt->execute([$user['id']]);
     }
     $posts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Me gusta recibidos: filas de post_likes que apuntan a publicaciones MÍAS (se cuentan, no se guardan)
+    $likesReceived = 0;
+    try {
+        $stmt = $pdo->prepare('SELECT COUNT(*) FROM post_likes pl JOIN posts p ON p.id = pl.post_id WHERE p.user_id = ?');
+        $stmt->execute([$user['id']]);
+        $likesReceived = (int) $stmt->fetchColumn();
+    } catch (PDOException $e) {
+        // Sin la migración 006 no existe post_likes: el perfil se muestra igual, con 0 me gusta
+        error_log('[Pilchak] Perfil sin migración 006: ' . $e->getMessage());
+    }
 } catch (PDOException $e) {
     error_log('[Pilchak] Error al cargar el perfil: ' . $e->getMessage());
     abort_with(500, 'No pudimos cargar tu perfil. Intentá de nuevo más tarde.');
@@ -97,7 +108,7 @@ $maxProfile = upload_limit_bytes(UPLOAD_MAX_PROFILE_IMAGE);
         <ul class="profile__stats">
             <li><strong><?= count($posts) ?></strong> Publicaciones</li>
             <li><strong>0</strong> Seguidores</li>
-            <li><strong>0</strong> Me gusta</li>
+            <li><strong><?= number_format($likesReceived, 0, ',', '.') ?></strong> Me gusta</li>
         </ul>
 
         <button type="button" class="btn" id="open-edit">Editar fotos</button>

@@ -1,10 +1,11 @@
 // Formulario "Nueva publicación" (solo se carga con sesión iniciada; ver landing.php).
 //
 // API usada: POST /src/controllers/api/posts.php   Cabecera: X-CSRF-Token (de <meta name="csrf-token">)
-//   - Sin archivo:  Content-Type: application/json   Cuerpo: { "title", "content", "phone"? }
-//   - Con archivo:  multipart/form-data (FormData)   Campos: title, content, phone?, media (imagen o video)
+//   - Sin archivo:  Content-Type: application/json   Cuerpo: { "title", "content", "price", "size", "phone"? }
+//   - Con archivo:  multipart/form-data (FormData)   Campos: title, content, price, size, phone?, media (imagen o video)
+//   El precio y la talla son OBLIGATORIOS (se validan acá y el servidor vuelve a validarlos).
 //     (con multipart NO se fija el Content-Type: el navegador agrega el "boundary")
-//   201 -> { status: "success", data: { id, title, content, phone, media_type, media_url, created_at, ..., user_name } }
+//   201 -> { status: "success", data: { id, title, content, price, size, phone, media_type, media_url, created_at, ..., user_name } }
 //   4xx -> { status: "error", message: "...", errors: ["...", ...] }
 // Los archivos no van a la base de datos: el servidor los guarda en disco y la base guarda solo la ruta.
 (function () {
@@ -18,6 +19,8 @@
   var API_URL = feed.dataset.api;
   var TITLE_MAX = 255;      // mismos topes que la API
   var CONTENT_MAX = 10000;
+  var PRICE_MAX = 99999999.99;   // tope de la columna DECIMAL(10,2)
+  var SIZE_MAX = 20;
   var MAX_IMAGE = parseInt(form.dataset.maxImage, 10) || 5 * 1024 * 1024;   // los calcula el servidor (landing.php)
   var MAX_VIDEO = parseInt(form.dataset.maxVideo, 10) || 8 * 1024 * 1024;
   var IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -30,6 +33,8 @@
   var modal = new window.bootstrap.Modal(modalEl);
   var titleInput = form.elements.title;
   var contentInput = form.elements.content;
+  var priceInput = form.elements.price;
+  var sizeInput = form.elements.size;
   var phoneInput = form.elements.phone;
   var mediaInput = form.elements.media;
   var fileBox = document.getElementById('publishFile');
@@ -121,13 +126,43 @@
 
   fileClear.addEventListener('click', resetFile);
 
+  // ---------- Precio y talla ----------
+  // Misma regla que apiParsePrice() en posts.php: 15000, 15000,50 o 15.000,50 (un punto con 3 dígitos = miles).
+  // Devuelve un mensaje de error, o '' si el precio sirve.
+  function priceProblem(raw) {
+    var text = raw.replace(/[\s$]+/g, '');
+    if (!text) { return 'El precio es obligatorio.'; }
+    if (/^\d{1,3}(\.\d{3})+(,\d{1,2})?$/.test(text)) {
+      text = text.replace(/\./g, '').replace(',', '.');
+    } else if (/^\d+([.,]\d{1,2})?$/.test(text)) {
+      text = text.replace(',', '.');
+    } else {
+      return 'El precio debe ser un número, con hasta 2 decimales (ej: 15000 o 15.000,50).';
+    }
+    var value = parseFloat(text);
+    if (value <= 0) { return 'El precio debe ser mayor que 0.'; }
+    if (value > PRICE_MAX) { return 'El precio no puede superar $99.999.999,99.'; }
+    return '';
+  }
+
+  function sizeProblem(size) {
+    if (!size) { return 'La talla o número es obligatorio.'; }
+    if (size.length > SIZE_MAX) { return 'La talla no puede superar ' + SIZE_MAX + ' caracteres.'; }
+    if (!/^[\p{L}\p{N} .,\/+\-]+$/u.test(size)) { return 'La talla solo puede tener letras, números, espacios y los signos . , / + -'; }
+    return '';
+  }
+
   // ---------- Validación (el servidor vuelve a validar) ----------
-  function validate(title, content, phone, file) {
+  function validate(title, content, price, size, phone, file) {
     var errors = [];
     if (!title) { errors.push('El título es obligatorio.'); }
     else if (title.length > TITLE_MAX) { errors.push('El título no puede superar ' + TITLE_MAX + ' caracteres.'); }
     if (!content) { errors.push('La descripción es obligatoria.'); }
     else if (content.length > CONTENT_MAX) { errors.push('La descripción no puede superar ' + CONTENT_MAX + ' caracteres.'); }
+    var problemPrice = priceProblem(price);
+    if (problemPrice) { errors.push(problemPrice); }
+    var problemSize = sizeProblem(size);
+    if (problemSize) { errors.push(problemSize); }
     if (phone) {
       var digits = phone.replace(/\D+/g, '').length;
       if (!/^[0-9+()\-\s]+$/.test(phone)) { errors.push('El WhatsApp solo puede contener números, espacios, +, - y paréntesis.'); }
@@ -154,9 +189,11 @@
 
     var title = titleInput.value.trim();
     var content = contentInput.value.trim();
+    var price = priceInput.value.trim();
+    var size = sizeInput.value.replace(/\s+/g, ' ').trim();
     var phone = phoneInput.value.trim();
     var file = mediaInput.files && mediaInput.files[0] ? mediaInput.files[0] : null;
-    var errors = validate(title, content, phone, file);
+    var errors = validate(title, content, price, size, phone, file);
     if (errors.length) { showErrors(errors); return; }
 
     clearErrors();
@@ -171,12 +208,16 @@
       var data = new FormData();
       data.append('title', title);
       data.append('content', content);
+      data.append('price', price);
+      data.append('size', size);
       if (phone) { data.append('phone', phone); }
       data.append('media', file);
       options.body = data;                                   // multipart: el navegador fija el Content-Type
     } else {
       options.headers['Content-Type'] = 'application/json';
-      options.body = JSON.stringify(phone ? { title: title, content: content, phone: phone } : { title: title, content: content });
+      var payload = { title: title, content: content, price: price, size: size };
+      if (phone) { payload.phone = phone; }
+      options.body = JSON.stringify(payload);
     }
 
     fetch(API_URL, options)

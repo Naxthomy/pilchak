@@ -43,7 +43,7 @@ Incluye:
 │   ├── img/                logo e imágenes fijas
 │   │   └── uploads/        Archivos subidos por los usuarios (con su propio .htaccess; no se versionan)
 │   └── js/                 landing.js, feed.js, publish.js (+ Bootstrap)
-├── migrations/             Scripts SQL incrementales para bases de datos ya existentes (001 a 006)
+├── migrations/             Scripts SQL incrementales para bases de datos ya existentes (001 a 007)
 ├── src/
 │   ├── config/             session.php, bootstrap.php, database.php
 │   ├── controllers/
@@ -102,6 +102,7 @@ mysql -u TU_USUARIO -p < schema.sql
 | `002_add_profile_to_users.sql` | `users.avatar`, `users.cover`, `users.bio` | El perfil se muestra sin fotos y avisa que falta. |
 | `003_add_media_to_posts.sql` | `posts.media_type`, `posts.media_path` (imagen o video) | La API rechaza posts con archivo (500 con mensaje claro). |
 | `004_add_comments_table.sql` | Tabla `comments` (solo esquema) | Nada: ningún código la usa todavía. Se puede aplicar cuando se implemente la funcionalidad. |
+| `007_add_price_size_to_posts.sql` | `posts.price` (precio) y `posts.size` (talla o número). Obligatorios al publicar; en la base admiten NULL para no romper las publicaciones viejas. | El feed funciona sin precio ni talla; crear una publicación responde 500 con un mensaje claro. |
 | `006_add_post_likes_table.sql` | Tabla `post_likes` (me gusta: un usuario, una publicación) | El feed funciona con todos los totales en 0; dar me gusta responde 500 (falta la tabla). |
 
 Ninguna migración borra ni modifica datos. Las imágenes de las publicaciones **no** necesitan una tabla aparte: la base guarda solo `media_type` y `media_path`, y el archivo vive en disco.
@@ -142,6 +143,8 @@ Respuesta `200`:
       "phone": "5491123456789",
       "media_type": "image",
       "media_url": "/assets/img/uploads/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/post_3f2b8c1e-9a4d-4c6b-8e21-5d7f0a9b1c34.jpg",
+      "price": "15000.00",
+      "size": "M",
       "created_at": "2026-10-10 18:00:00",
       "updated_at": "2026-10-10 18:00:00",
       "user_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -154,6 +157,8 @@ Respuesta `200`:
       "phone": null,
       "media_type": null,
       "media_url": null,
+      "price": null,
+      "size": null,
       "created_at": "2026-10-09 10:00:00",
       "updated_at": "2026-10-09 10:00:00",
       "user_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
@@ -170,6 +175,8 @@ Respuesta `200`:
 | `phone` | WhatsApp de contacto, solo dígitos (8 a 15), o `null`. Es público. |
 | `media_type` | `"image"`, `"video"` o `null`. |
 | `media_url` | Ruta pública del archivo, **relativa a la raíz del sitio** (empieza con `/`), o `null`. Si lo consumís desde otro dominio, anteponé el origen del sitio. Solo se entrega si la ruta tiene el formato que genera el servidor; la ruta interna de la base nunca se expone. |
+| `price` | Precio en pesos como texto decimal (`"15000.00"`). `null` en publicaciones viejas, anteriores a la migración 007. |
+| `size` | Talla o número (`"M"`, `"XL"`, `"42"`), en mayúsculas. `null` en publicaciones viejas. |
 | `user_name` | Nombre del autor. No se expone ningún otro dato del usuario (ni email ni contraseña). |
 
 ### 5.2 `POST`: crear una publicación
@@ -182,6 +189,8 @@ Se puede enviar como **JSON** (sin archivo), como **`multipart/form-data`** (con
 |---|---|---|
 | `title` | Sí | Texto, hasta 255 caracteres. |
 | `content` | Sí | Texto, hasta 10 000 caracteres. |
+| `price` | **Sí** | Precio mayor que 0, hasta 2 decimales y hasta 99.999.999,99. Se acepta `15000`, `15000,50` o `15.000,50` (un punto seguido de 3 dígitos es separador de miles: `1.500` = 1500); el `$` y los espacios se ignoran. Requiere la migración 007. |
+| `size` | **Sí** | Talla o número: letras, números, espacios y `. , / + -`, hasta 20 caracteres. Se guarda en mayúsculas. Requiere la migración 007. |
 | `phone` | No | Se aceptan espacios, `+`, `-` y paréntesis; se guarda solo con dígitos (8 a 15, con código de país). Requiere la migración 001. |
 | `media` | No | Archivo en un campo `multipart/form-data` llamado `media`. Ver §5.3. Requiere la migración 003. |
 
@@ -194,7 +203,7 @@ const res = await fetch('/src/controllers/api/posts.php', {
   method: 'POST',
   credentials: 'same-origin',
   headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-Token': token },
-  body: JSON.stringify({ title: 'Campera de jean', content: 'Talle M', phone: '+54 9 11 2345-6789' }),
+  body: JSON.stringify({ title: 'Campera de jean', content: 'Casi sin uso.', price: '15000', size: 'M', phone: '+54 9 11 2345-6789' }),
 });
 const json = await res.json();
 ```
@@ -204,7 +213,9 @@ Con imagen o video (`multipart/form-data`; **no** fijes el `Content-Type`: el na
 ```js
 const data = new FormData();
 data.append('title', 'Campera de jean');
-data.append('content', 'Talle M, casi sin uso.');
+data.append('content', 'Casi sin uso.');
+data.append('price', '15000');
+data.append('size', 'M');
 data.append('media', fileInput.files[0]);
 
 const res = await fetch('/src/controllers/api/posts.php', {
@@ -227,6 +238,8 @@ Respuesta `201` (la publicación creada, con la misma forma que cada elemento de
     "phone": null,
     "media_type": "image",
     "media_url": "/assets/img/uploads/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/post_3f2b8c1e-9a4d-4c6b-8e21-5d7f0a9b1c34.jpg",
+    "price": "15000.00",
+    "size": "M",
     "created_at": "2026-10-11 20:03:11",
     "updated_at": "2026-10-11 20:03:11",
     "user_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -267,7 +280,7 @@ Siempre con la forma `{"status": "error", "message": "...", "errors": ["..."]}` 
 | `405` | Método distinto de `GET` o `POST` (la cabecera `Allow` indica los permitidos). |
 | `413` | Cuerpo JSON de más de 64 KB, o `multipart` que supera `post_max_size`. |
 | `422` | Datos inválidos: campos faltantes o muy largos, teléfono inválido, archivo con formato, tamaño o contenido no permitidos, o usuario de la sesión inexistente. |
-| `500` | Error del servidor (detalle solo en el log) o falta una migración (001 o 003). |
+| `500` | Error del servidor (detalle solo en el log) o falta una migración (001, 003 o 007). |
 
 No existen endpoints para editar o eliminar posts ni para búsqueda. El GET de posts agrega a cada publicación `likes_count` (total de «me gusta» de todos los usuarios, contado en la base) y `liked` (`true` si el usuario de la sesión ya le dio me gusta; siempre `false` para un invitado). Los me gusta se dan y se quitan en `interactions.php` (recurso `likes`, abajo).
 
@@ -289,6 +302,8 @@ Errores: `400` (resource inválido o JSON roto), `401`, `403`, `404` (la publica
 
 - **Feed** (`src/views/landing.php` + `assets/js/feed.js`): pide las publicaciones a la API y las dibuja con el DOM (`textContent`, nunca `innerHTML`, así no hay XSS). Las publicaciones con imagen o video se muestran a pantalla completa (autoplay y pausa de videos); las de solo texto, como tarjeta. Solo se aceptan `media_url` con el formato exacto que genera el servidor y cuyo tipo coincida con la extensión.
 - **Acciones de cada publicación** (columna derecha, de arriba abajo): perfil, **Me gusta**, **Comentar**, **Guardar** y WhatsApp.
+- **Formulario de publicar** (`#publishForm`): además del título y la descripción, **Precio** y **Talla o número** son obligatorios (el formulario los valida y la API vuelve a validarlos). La tarjeta del feed los muestra como «Precio: $15.000» y «Talla: M»; las publicaciones viejas sin esos datos se ven igual, sin esa línea.
+- **Perfil** (`src/views/profile/index.php`): el contador «Me gusta» suma los me gusta recibidos en todas tus publicaciones (se cuentan en `post_likes`; 0 si falta la migración 006).
 - **Botón «Me gusta»** (`data-action="like"`, también el doble toque sobre la publicación): con sesión, el corazón y el número cambian al instante, se guarda en la tabla `post_likes` y se muestra el total que devuelve el servidor (suma de todos los usuarios; desde 1000 se abrevia, «1,2 mil»). Volver a tocarlo quita el me gusta y el total baja. Una misma persona no puede sumar dos veces (clave primaria `user_id` + `post_id`). Si el servidor falla, todo vuelve atrás y se avisa; un invitado recibe «Iniciá sesión para dar me gusta».
 - **Botón «Comentar»** (`data-action="comment"`): abre el modal `#commentsModal` (`landing.php`), pide los comentarios de esa publicación y, con sesión, permite escribir y enviar (botón «Enviar» o Ctrl + Enter). Los invitados pueden leer; para comentar se les pide iniciar sesión. Los textos se dibujan con `textContent` (sin XSS).
 - **Botón «Guardar»** (bookmark, `data-action="save"`): con sesión, cambia el icono al instante y guarda o quita la publicación en la tabla `saved_posts`; si el servidor falla, el icono vuelve atrás y se avisa. Al cargar el feed se piden los guardados del usuario para marcar los iconos. Un invitado recibe el aviso «Iniciá sesión para guardar publicaciones».
@@ -340,7 +355,7 @@ El login con Google todavía no está implementado: el botón aparece deshabilit
 
 ## 9. Pruebas
 
-En `tests/ui/` hay una batería (115 pruebas) que abre el feed en un Chromium real (Playwright) y comprueba: barras y popup, formulario de publicar, WhatsApp, videos, responsive, navbar privado, los **botones de comentarios y guardado**, el **me gusta** (total de todos los usuarios, quitar, doble toque, errores) (posición, accesibilidad, que «Comentar» abra el modal y que no se tape en pantallas de 320 px), la carga de imágenes y videos, y que las URLs de adjuntos peligrosas (`javascript:`, `../`, externas, tipo cruzado) no lleguen al DOM.
+En `tests/ui/` hay una batería (132 pruebas) que abre el feed en un Chromium real (Playwright) y comprueba: barras y popup, formulario de publicar, WhatsApp, videos, responsive, navbar privado, los **botones de comentarios y guardado**, el **me gusta** (total de todos los usuarios, quitar, doble toque, errores) (posición, accesibilidad, que «Comentar» abra el modal y que no se tape en pantallas de 320 px), la carga de imágenes y videos, y que las URLs de adjuntos peligrosas (`javascript:`, `../`, externas, tipo cruzado) no lleguen al DOM.
 
 **No necesita PHP ni MySQL**: `harness.py` renderiza `landing.php` y `layout.php` con un mini-evaluador de plantillas y emula la API según su contrato.
 

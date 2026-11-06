@@ -8,7 +8,7 @@ declare(strict_types=1);
  *   POST /src/controllers/api/posts.php  -> crea un post (201)
  *
  * El POST acepta:
- *   - JSON (Content-Type: application/json): title, content y phone (opcional). Sin archivo.
+ *   - JSON (Content-Type: application/json): title, content, price, size y phone (opcional). Sin archivo.
  *   - multipart/form-data: los mismos campos más un archivo opcional "media" (imagen o video).
  *   - formulario (application/x-www-form-urlencoded), igual que store.php.
  * Requiere sesión iniciada: el autor sale de $_SESSION['user']['id'].
@@ -17,13 +17,19 @@ declare(strict_types=1);
  *   éxito  -> { "status": "success", "count": N, "data": [...] }      (GET)
  *             { "status": "success", "data": { ...post... } }          (POST)
  *   error  -> { "status": "error", "message": "...", "errors": [...] }
- *   post   -> { id, title, content, phone, media_type, media_url, created_at, updated_at, user_id, user_name,
- *               likes_count, liked }
+ *   post   -> { id, title, content, phone, media_type, media_url, price, size, created_at, updated_at, user_id,
+ *               user_name, likes_count, liked }
+ *             price: texto decimal "15000.00" (null en publicaciones viejas sin precio)   size: "M", "42"... (o null)
  *             media_type: 'image' | 'video' | null     media_url: '/assets/img/uploads/...' | null
  *             likes_count: total de "me gusta" de la publicación (de todos los usuarios), contado en la base.
  *             liked: true si el usuario de la sesión ya le dio me gusta (siempre false para un invitado).
  *             Los me gusta se dan y se quitan en interactions.php (recurso "likes"); requiere la tabla post_likes
  *             (migrations/006). Sin esa tabla el GET sigue funcionando: likes_count = 0 y liked = false.
+ *
+ * Campos obligatorios (además de title y content):
+ *   - price: precio en pesos, mayor que 0, hasta 2 decimales. Acepta 15000, 15000,50 o 15.000,50 (ver apiParsePrice).
+ *   - size:  talla o número (S, M, XL, 42, 38.5...), hasta 20 caracteres; se guarda en mayúsculas.
+ *            Ambos requieren las columnas posts.price y posts.size (migrations/007_add_price_size_to_posts.sql).
  *
  * Campos opcionales:
  *   - phone: WhatsApp de contacto, se guarda solo con dígitos (8 a 15, con código de país).
@@ -61,6 +67,8 @@ const API_MAX_BODY     = 65536;  // bytes admitidos en un cuerpo JSON
 const API_LIST_LIMIT   = 100;    // máximo de posts que devuelve el GET
 const PHONE_MIN_DIGITS = 8;      // WhatsApp: mínimo y máximo de dígitos (E.164 admite hasta 15)
 const PHONE_MAX_DIGITS = 15;
+const PRICE_MAX        = 99999999.99;  // tope de DECIMAL(10,2)
+const SIZE_MAX         = 20;           // largo máximo de la talla (VARCHAR(20))
 
 /** Envía una respuesta JSON y termina la ejecución. */
 function apiResponse(int $code, array $payload): void
@@ -123,8 +131,43 @@ function apiCsrfIsValid(array $input): bool
 }
 
 /**
+ * Convierte el precio escrito por el usuario en un texto decimal para DECIMAL(10,2) ("15000.00").
+ * Acepta "15000", "15000,50", "15.5", "$ 15.000" y "15.000,50" (punto de miles + coma decimal).
+ * Un punto seguido de EXACTAMENTE 3 dígitos es separador de miles ("1.500" = 1500).
+ * Devuelve [precio | null, mensaje_de_error | null].
+ */
+function apiParsePrice($raw): array
+{
+    if (is_int($raw) || is_float($raw)) {
+        $raw = (string) $raw;   // JSON { "price": 15000 }
+    }
+    $text = is_string($raw) ? (string) preg_replace('/[\s$]+/u', '', $raw) : '';
+    if ($text === '') {
+        return [null, 'El precio es obligatorio.'];
+    }
+
+    if (preg_match('/^\d{1,3}(\.\d{3})+(,\d{1,2})?$/', $text) === 1) {
+        $text = str_replace(',', '.', str_replace('.', '', $text));   // 15.000,50 -> 15000.50
+    } elseif (preg_match('/^\d+([.,]\d{1,2})?$/', $text) === 1) {
+        $text = str_replace(',', '.', $text);                         // 15000,50 -> 15000.50
+    } else {
+        return [null, 'El precio debe ser un número, con hasta 2 decimales (ej: 15000 o 15.000,50).'];
+    }
+
+    $value = (float) $text;
+    if ($value <= 0) {
+        return [null, 'El precio debe ser mayor que 0.'];
+    }
+    if ($value > PRICE_MAX) {
+        return [null, 'El precio no puede superar $99.999.999,99.'];
+    }
+
+    return [number_format($value, 2, '.', ''), null];
+}
+
+/**
  * Valida los datos de un post (misma regla que store.php: title y content
- * obligatorios, más trim y longitud máxima).
+ * obligatorios, más trim y longitud máxima). El precio y la talla también son obligatorios.
  * Devuelve [campos_normalizados, lista_de_errores].
  */
 function apiValidatePost(array $input): array
@@ -142,6 +185,27 @@ function apiValidatePost(array $input): array
         $errors[] = 'El campo content es obligatorio.';
     } elseif (text_length($content) > POST_CONTENT_MAX) {
         $errors[] = 'El campo content no puede superar ' . POST_CONTENT_MAX . ' caracteres.';
+    }
+
+    // price y size (obligatorios): el precio se guarda como decimal; la talla (S, M, XL, 42, 38.5...) en mayúsculas
+    [$price, $priceError] = apiParsePrice($input['price'] ?? null);
+    if ($priceError !== null) {
+        $errors[] = $priceError;
+    }
+
+    $rawSize = $input['size'] ?? null;
+    if (is_int($rawSize)) {
+        $rawSize = (string) $rawSize;   // JSON { "size": 42 }
+    }
+    $size = is_string($rawSize) ? trim((string) preg_replace('/\s+/u', ' ', $rawSize)) : '';
+    if ($size === '') {
+        $errors[] = 'La talla o número es obligatorio.';
+    } elseif (text_length($size) > SIZE_MAX) {
+        $errors[] = 'La talla no puede superar ' . SIZE_MAX . ' caracteres.';
+    } elseif (preg_match('/^[\p{L}\p{N} .,\/+\-]+$/u', $size) !== 1) {
+        $errors[] = 'La talla solo puede tener letras, números, espacios y los signos . , / + -';
+    } else {
+        $size = function_exists('mb_strtoupper') ? mb_strtoupper($size, 'UTF-8') : strtoupper($size);
     }
 
     // phone (opcional): se aceptan espacios, + , - y paréntesis, y se guarda solo con dígitos
@@ -167,7 +231,7 @@ function apiValidatePost(array $input): array
         }
     }
 
-    return [['title' => $title, 'content' => $content, 'phone' => $phone], $errors];
+    return [['title' => $title, 'content' => $content, 'phone' => $phone, 'price' => $price, 'size' => $size], $errors];
 }
 
 /** ¿Se envió un archivo en el campo "media"? */
@@ -246,8 +310,9 @@ function apiPostColumns(PDO $pdo): string
 {
     $phone = apiHasColumn($pdo, 'phone') ? 'p.phone' : 'NULL AS phone';
     $media = apiHasColumn($pdo, 'media_path') ? 'p.media_type, p.media_path' : 'NULL AS media_type, NULL AS media_path';
+    $deal  = apiHasColumn($pdo, 'price') && apiHasColumn($pdo, 'size') ? 'p.price, p.size' : 'NULL AS price, NULL AS size';
 
-    return "p.id, p.title, p.content, {$phone}, {$media}, p.created_at, p.updated_at, u.id AS user_id, u.name AS user_name";
+    return "p.id, p.title, p.content, {$phone}, {$media}, {$deal}, p.created_at, p.updated_at, u.id AS user_id, u.name AS user_name";
 }
 
 /** Forma pública de un post: la ruta interna del archivo se entrega como media_url (o null si no es válida). */
@@ -345,6 +410,9 @@ try {
             if ($campos['phone'] !== null && !$hasPhoneColumn) {
                 apiError(500, 'La base de datos necesita la migración 001 para guardar el WhatsApp. Avisá al administrador.');
             }
+            if (!apiHasColumn($pdo, 'price') || !apiHasColumn($pdo, 'size')) {
+                apiError(500, 'La base de datos necesita la migración 007 para guardar el precio y la talla. Avisá al administrador.');
+            }
             if ($hasMedia && !apiHasColumn($pdo, 'media_path')) {
                 apiError(500, 'La base de datos necesita la migración 003 para guardar imágenes o videos. Avisá al administrador.');
             }
@@ -363,11 +431,13 @@ try {
             }
 
             $id     = uuid_v4();
-            $cols   = ['id', 'title', 'content', 'user_id'];
+            $cols   = ['id', 'title', 'content', 'price', 'size', 'user_id'];
             $params = [
                 'id'      => $id,
                 'title'   => $campos['title'],
                 'content' => $campos['content'],
+                'price'   => $campos['price'],
+                'size'    => $campos['size'],
                 'user_id' => current_user()['id'],
             ];
             if ($hasPhoneColumn) {

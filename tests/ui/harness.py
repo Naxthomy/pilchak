@@ -5,6 +5,7 @@ Arnés de pruebas de Pilchak (SIN PHP):
    construcciones que esas vistas usan; ante cualquier otra lanza error (no ignora nada en silencio).
  - Emula la API con el contrato de src/controllers/api/posts.php (NO ejecuta ese PHP): JSON y multipart,
    validación del archivo por CONTENIDO (como finfo), topes de tamaño y CSRF.
+ - Emula el precio y la talla OBLIGATORIOS de posts.php (apiParsePrice y la regla de la talla).
  - Emula los me gusta: posts.php agrega likes_count y liked a cada post, e interactions.php?resource=likes
    cuenta el total con el contrato real (STATE["likes"] = {id: {"others": me gusta de otros, "mine": ¿lo di yo?}}).
  - Login/registro/home/perfil son STUBS mínimos (no son los PHP reales).
@@ -27,6 +28,26 @@ def reset_state():
     STATE.clear()
     STATE.update(posts=[], api_mode="ok", post_delay=0.0, post_log=[], force=None, files={},
                  likes={}, like_log=[], like_fail=False, like_bump=0)
+
+def parse_deal(raw_price, raw_size):
+    """Emula apiParsePrice() y la regla de la talla de posts.php. Devuelve (precio "15000.00", talla, errores)."""
+    errors = []; price = None
+    text = re.sub(r"[\s$]+", "", str(raw_price)) if isinstance(raw_price, (str, int, float)) and not isinstance(raw_price, bool) else ""
+    if not text: errors.append("El precio es obligatorio.")
+    else:
+        if re.fullmatch(r"\d{1,3}(\.\d{3})+(,\d{1,2})?", text): text = text.replace(".", "").replace(",", ".")
+        elif re.fullmatch(r"\d+([.,]\d{1,2})?", text): text = text.replace(",", ".")
+        else: text = None
+        if text is None: errors.append("El precio debe ser un número, con hasta 2 decimales (ej: 15000 o 15.000,50).")
+        elif float(text) <= 0: errors.append("El precio debe ser mayor que 0.")
+        elif float(text) > 99999999.99: errors.append("El precio no puede superar $99.999.999,99.")
+        else: price = "%.2f" % float(text)
+    size = re.sub(r"\s+", " ", raw_size).strip() if isinstance(raw_size, str) else ""
+    if not size: errors.append("La talla o número es obligatorio.")
+    elif len(size) > 20: errors.append("La talla no puede superar 20 caracteres.")
+    elif not re.fullmatch(r"[\w .,/+\-]+", size): errors.append("La talla solo puede tener letras, números, espacios y los signos . , / + -")
+    else: size = size.upper()
+    return price, size, errors
 
 def sniff(data):
     """Tipo según el CONTENIDO del archivo (emula finfo), no según lo que informa el navegador."""
@@ -170,6 +191,9 @@ class H(BaseHTTPRequestHandler):
             d = fields if multipart else json.loads(raw)
             t, c = d.get("title", "").strip(), d.get("content", "").strip()
             if STATE["force"] == "422" or t == "FORCE422": return J(422, {"status": "error", "message": "Datos inválidos.", "errors": ["El campo title es obligatorio.", "Error de ejemplo del servidor."]})
+            # Precio y talla obligatorios, misma regla que posts.php (apiParsePrice + talla en mayúsculas)
+            price, size, deal_errors = parse_deal(d.get("price"), d.get("size"))
+            if deal_errors: return J(422, {"status": "error", "message": "Datos inválidos.", "errors": deal_errors})
             # Misma regla que src/controllers/api/posts.php: phone opcional, solo dígitos, 8 a 15
             raw_phone = d.get("phone"); phone = None
             if raw_phone not in (None, ""):
@@ -191,7 +215,7 @@ class H(BaseHTTPRequestHandler):
                     return J(422, {"status": "error", "message": "Datos inválidos.", "errors": [("El video" if kind == "video" else "La imagen") + " supera los %d MB." % (limit // 1048576)]})
                 media_url = "/assets/img/uploads/%s/post_%s.%s" % (USER_ID, uuid.uuid4(), ext)   # UUID v4, como save_upload() en uploads.php
                 STATE["files"][media_url] = (data, mime); media_type = kind
-            post = {"id": str(uuid.uuid4()), "title": t, "content": c, "phone": phone, "media_type": media_type, "media_url": media_url,
+            post = {"id": str(uuid.uuid4()), "title": t, "content": c, "phone": phone, "media_type": media_type, "media_url": media_url, "price": price, "size": size,
                     "created_at": "2026-10-11 20:03:11", "updated_at": "2026-10-11 20:03:11", "user_id": USER_ID, "user_name": "Ana"}
             STATE["posts"].insert(0, post)
             return J(201, {"status": "success", "data": post})
