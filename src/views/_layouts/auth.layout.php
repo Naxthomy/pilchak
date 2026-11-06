@@ -17,7 +17,15 @@ if (is_authenticated()) {
   <script src="/assets/js/bootstrap.min.js"></script>
   <title>Autenticate - Pilchak</title>
 </head>
-<body>
+<body class="pk-body pk-body--auth">
 
-  <div class="auth-wrapper">
-    <div class="auth-card">
+  <!-- Fondo decorativo (paleta oscura): los destellos se pintan desde el CSS -->
+  <div class="pk-auth-bg" aria-hidden="true">
+    <span class="pk-auth-bg__glow pk-auth-bg__glow--1"></span>
+    <span class="pk-auth-bg__glow pk-auth-bg__glow--2"></span>
+  </div>
+
+  <!-- Estas etiquetas quedan abiertas a propósito: login.php y register.php siguen escribiendo
+       su formulario a continuación (el navegador las cierra al final del documento). -->
+  <div class="auth-wrapper pk-auth">
+    <div class="auth-card pk-card pk-card--auth">
