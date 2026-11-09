@@ -442,6 +442,10 @@
   .join-modal .modal-title { color: var(--text-main); }
   .join-modal .btn-close { opacity: .8; }
   .join-modal textarea.form-control { resize: vertical; }
+  /* El <form> envuelve cabecera, cuerpo y pie dentro de .modal-content. Sin esto el formulario crece más que la
+     pantalla (y más aún con la caja de errores) y Bootstrap no llega a hacer scroll en .modal-body: queda cortado.
+     Así el form ocupa el alto disponible, el título y el botón quedan fijos y solo el cuerpo se desliza. */
+  .join-modal > form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; max-height: 100%; }
   .publish-hint { color: var(--text-muted); }
   
   .btn:focus-visible { outline: 3px solid #c7d2fe; outline-offset: 3px; }

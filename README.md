@@ -355,7 +355,7 @@ El login con Google todavía no está implementado: el botón aparece deshabilit
 
 ## 9. Pruebas
 
-En `tests/ui/` hay una batería (132 pruebas) que abre el feed en un Chromium real (Playwright) y comprueba: barras y popup, formulario de publicar, WhatsApp, videos, responsive, navbar privado, los **botones de comentarios y guardado**, el **me gusta** (total de todos los usuarios, quitar, doble toque, errores) (posición, accesibilidad, que «Comentar» abra el modal y que no se tape en pantallas de 320 px), la carga de imágenes y videos, y que las URLs de adjuntos peligrosas (`javascript:`, `../`, externas, tipo cruzado) no lleguen al DOM.
+En `tests/ui/` hay una batería (141 pruebas) que abre el feed en un Chromium real (Playwright) y comprueba: barras y popup, formulario de publicar, WhatsApp, videos, responsive, navbar privado, los **botones de comentarios y guardado**, el **me gusta** (total de todos los usuarios, quitar, doble toque, errores) (posición, accesibilidad, que «Comentar» abra el modal y que no se tape en pantallas de 320 px), la carga de imágenes y videos, y que las URLs de adjuntos peligrosas (`javascript:`, `../`, externas, tipo cruzado) no lleguen al DOM.
 
 **No necesita PHP ni MySQL**: `harness.py` renderiza `landing.php` y `layout.php` con un mini-evaluador de plantillas y emula la API según su contrato.
 

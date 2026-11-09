@@ -467,6 +467,23 @@ with sync_playwright() as pw:
     check("11.9 el servidor acepta «$ 15.000,50» y guarda precio 15000.50 y talla «M» (mayúsculas, sin espacios de más)", r3["status"] == 201 and r3["body"]["data"]["price"] == "15000.50" and r3["body"]["data"]["size"] == "M", r3)
     check("11.10 sin errores de JavaScript en toda la sección", p.errors == [], p.errors)
     c.close()
+
+    print("\n=== 12. FORMULARIO DE PUBLICAR: con avisos de error el cuadro cabe en pantalla y se desliza ===")
+    harness.reset_state()
+    for (w, h) in [(390, 844), (390, 560), (505, 700)]:
+        c = ctx_for(br, auth=True, w=w, h=h); p = new_page(c); open_feed(p)
+        p.click("[data-nav=publish]"); modal_open(p, "publishModal"); p.click("#publishSubmit"); p.wait_for_timeout(300)
+        info = p.evaluate("()=>{const mc=document.querySelector('#publishModal .modal-content').getBoundingClientRect(),mb=document.querySelector('#publishModal .modal-body');return {vh:innerHeight,contentH:Math.round(mc.height),bodyClient:mb.clientHeight,bodyScroll:mb.scrollHeight,errors:document.querySelectorAll('#publishErrors li').length}}")
+        check("12.1 (%dx%d) con 4 avisos de error el cuadro NO supera la altura de la pantalla" % (w, h), info["errors"] == 4 and info["contentH"] <= info["vh"], info)
+        p.evaluate("()=>{const b=document.querySelector('#publishModal .modal-body');b.scrollTop=b.scrollHeight}"); p.wait_for_timeout(200)
+        end = p.evaluate("()=>{const mc=document.querySelector('#publishModal .modal-content').getBoundingClientRect(),ph=document.getElementById('publishPhone').getBoundingClientRect(),sb=document.getElementById('publishSubmit').getBoundingClientRect();return {scrollTop:document.querySelector('#publishModal .modal-body').scrollTop,phoneInside:ph.bottom<=mc.bottom+1&&ph.top>=mc.top,submitInside:sb.bottom<=mc.bottom+1&&sb.top>=mc.top}}")
+        check("12.2 (%dx%d) el cuerpo se desliza hasta el último campo (WhatsApp) y el botón Publicar sigue a la vista" % (w, h), end["scrollTop"] > 0 and end["phoneInside"] and end["submitInside"], end)
+        p.evaluate("()=>{document.querySelector('#publishModal .modal-body').scrollTop=0}")
+        p.fill("#publishTitle", "ok"); p.fill("#publishContent", "ok"); p.fill("#publishPrice", "100"); p.fill("#publishSize", "M")
+        p.evaluate("()=>{const b=document.querySelector('#publishModal .modal-body');b.scrollTop=b.scrollHeight}"); p.fill("#publishPrice", "abc"); p.click("#publishSubmit"); p.wait_for_timeout(300)
+        vis = p.evaluate("()=>{const b=document.querySelector('#publishModal .modal-body').getBoundingClientRect(),e=document.getElementById('publishErrors').getBoundingClientRect();return e.top>=b.top-1&&e.bottom<=b.bottom+1}")
+        check("12.3 (%dx%d) si la persona estaba abajo, al enviar con error la caja de avisos se trae a la vista" % (w, h), vis)
+        c.close()
     br.close()
 
 srv.shutdown()

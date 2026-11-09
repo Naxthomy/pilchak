@@ -66,6 +66,8 @@
     });
     errorBox.appendChild(ul);
     errorBox.classList.remove('d-none');
+    // El cuerpo del formulario se desliza: si la persona estaba más abajo, se sube hasta que se vean los avisos
+    errorBox.scrollIntoView({ block: 'nearest' });
   }
 
   function clearErrors() {
