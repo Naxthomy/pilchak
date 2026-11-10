@@ -1,26 +1,76 @@
+/* =====================================================================
+   Pilchak · estilos globales (login/registro, páginas privadas, base del feed)
+   Estética: oscura + glassmorphism, neones apagados.
+   Lo usan: landing.php, auth.layout.php y layout.php.
+   ===================================================================== */
 :root {
-  --primary-color: #6366f1;
-  --primary-hover: #4f46e5;
-  --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
-  --card-bg: #1e293b;
-  --card-border: #334155;
-  --card-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --input-bg: #0f172a;
-  --input-border: #334155;
+  /* Paleta (se reutiliza en landing.css) */
+  --bg-0: #05070d;
+  --bg-1: #0a0f1a;
+  --primary-color: #6f7df2;
+  --primary-hover: #5d6be0;
+  --accent-soft: #9aa7ff;
+  --glass: rgba(16, 22, 36, .58);
+  --glass-strong: rgba(12, 17, 29, .86);
+  --glass-hi: rgba(255, 255, 255, .06);
+  --line: rgba(190, 202, 225, .16);
+  --line-strong: rgba(205, 215, 235, .30);
+  --blur: blur(16px) saturate(120%);
+  --radius-lg: 1.4rem;
+  --radius-md: .8rem;
+  --text-main: #e8edf8;
+  --text-muted: #8d99b0;
+  --input-bg: rgba(6, 9, 16, .65);
+  --input-border: rgba(190, 202, 225, .20);
+  --card-shadow: 0 24px 60px -12px rgba(0, 0, 0, .65), inset 0 1px 0 rgba(255, 255, 255, .06);
+  --font-mono: ui-monospace, "JetBrains Mono", "Roboto Mono", SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Compatibilidad con nombres anteriores */
+  --bg-gradient: linear-gradient(160deg, #05070d 0%, #0b1120 55%, #070a14 100%);
+  --card-bg: var(--glass-strong);
+  --card-border: var(--line);
 }
+
+* { -webkit-tap-highlight-color: transparent; }
 
 body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: var(--bg-gradient);
   min-height: 100vh;
   margin: 0;
   color: var(--text-main);
+  background-color: var(--bg-0);
+  background-image:
+    radial-gradient(60rem 38rem at 12% 8%,  rgba(52, 92, 175, .20), transparent 62%),
+    radial-gradient(52rem 36rem at 92% 88%, rgba(86, 72, 178, .17), transparent 62%),
+    radial-gradient(40rem 30rem at 70% 8%,  rgba(30, 120, 150, .10), transparent 65%),
+    linear-gradient(160deg, #05070d 0%, #0a0f1c 55%, #060912 100%);
+  background-attachment: fixed;
 }
 
+/* Destellos desenfocados (bokeh suave) detrás de todo el contenido */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  filter: blur(6px);
+  background:
+    radial-gradient(circle at 11% 16%, rgba(120, 160, 255, .20) 0 34px, transparent 110px),
+    radial-gradient(circle at 34% 9%,  rgba(120, 160, 255, .10) 0 20px, transparent 70px),
+    radial-gradient(circle at 21% 46%, rgba(130, 170, 255, .12) 0 26px, transparent 90px),
+    radial-gradient(circle at 8% 84%,  rgba(100, 140, 240, .14) 0 38px, transparent 120px),
+    radial-gradient(circle at 90% 30%, rgba(140, 150, 255, .16) 0 44px, transparent 130px),
+    radial-gradient(circle at 76% 76%, rgba(110, 130, 230, .12) 0 30px, transparent 100px),
+    radial-gradient(circle at 94% 92%, rgba(150, 160, 255, .12) 0 22px, transparent 80px);
+}
+
+/* ---------------------------------------------------------------------
+   Login / registro
+   --------------------------------------------------------------------- */
 .auth-wrapper {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -28,88 +78,111 @@ body {
 }
 
 .auth-card {
-  background-color: var(--card-bg);
-  border: 1px solid var(--card-border);
+  position: relative;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, .015)),
+    var(--glass);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  border: 1px solid var(--line);
   padding: 2.5rem 2rem;
-  border-radius: 1.25rem;
+  border-radius: var(--radius-lg);
   box-shadow: var(--card-shadow);
   width: 100%;
   max-width: 420px;
 }
 
-.auth-subtitle {
-  color: #cbd5e1;
-}
-
-.auth-footer-text {
-  color: #cbd5e1;
-}
+.auth-subtitle,
+.auth-footer-text { color: #aeb9cf; }
 
 /* Forzado de contraste limpio sobre textos dentro del layout */
-.auth-card h1, 
-.auth-card h4, 
+.auth-card h1,
+.auth-card h4,
 .auth-card p,
 .auth-card label,
-.form-label {
-  color: var(--text-main);
-}
+.form-label { color: var(--text-main); }
 
-.auth-card .text-muted {
-  color: var(--text-muted);
-}
+.auth-card .text-muted { color: var(--text-muted); }
 
 /* Inputs en modo oscuro */
 .form-control {
   background-color: var(--input-bg);
   color: var(--text-main);
-  border-radius: 0.65rem;
+  border-radius: var(--radius-md);
   padding: 0.75rem 0.9rem;
-  border: 1.5px solid var(--input-border);
-  transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+  border: 1px solid var(--input-border);
+  transition: border-color .2s ease-in-out, box-shadow .2s ease-in-out, background-color .2s;
 }
+.form-control::placeholder { color: #66728a; opacity: 1; }
 
 .form-control:focus {
-  background-color: var(--input-bg);
+  background-color: rgba(8, 12, 22, .85);
   color: var(--text-main);
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.25);
+  border-color: rgba(140, 155, 250, .65);
+  box-shadow: 0 0 0 4px rgba(111, 125, 242, .16);
 }
 
 /* Evita que el navegador pinte el input de blanco/amarillo al autocompletar */
 .form-control:-webkit-autofill,
-.form-control:-webkit-autofill:hover, 
+.form-control:-webkit-autofill:hover,
 .form-control:-webkit-autofill:focus {
   -webkit-text-fill-color: var(--text-main);
-  -webkit-box-shadow: 0 0 0px 1000px var(--input-bg) inset;
+  -webkit-box-shadow: 0 0 0 1000px #080c16 inset;
   transition: background-color 5000s ease-in-out 0s;
 }
 
-/* Botón principal */
+/* Botón principal (neón apagado) */
 .btn-primary {
-  background-color: var(--primary-color);
-  border-color: var(--primary-color);
-  border-radius: 0.65rem;
+  background: linear-gradient(180deg, #7684f4 0%, #5f6de0 100%);
+  border: 1px solid rgba(170, 182, 255, .35);
+  border-radius: var(--radius-md);
   padding: 0.75rem 1rem;
   font-weight: 600;
-  color: #ffffff;
-  transition: background-color 0.2s ease, transform 0.2s ease;
+  color: #fff;
+  box-shadow: 0 6px 22px -8px rgba(111, 125, 242, .55);
+  transition: filter .2s ease, transform .2s ease, box-shadow .2s ease;
+}
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-primary:active {
+  background: linear-gradient(180deg, #7f8cf6 0%, #6573e6 100%);
+  border-color: rgba(190, 200, 255, .5);
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 26px -8px rgba(111, 125, 242, .65);
 }
 
-.btn-primary:hover,
-.btn-primary:focus {
-  background-color: var(--primary-hover);
-  border-color: var(--primary-hover);
-  transform: translateY(-1px);
+.btn-secondary {
+  background: var(--glass-hi);
+  border: 1px solid var(--line);
+  color: var(--text-main);
+  border-radius: var(--radius-md);
 }
+.btn-secondary:hover,
+.btn-secondary:focus { background: rgba(255, 255, 255, .1); border-color: var(--line-strong); color: #fff; }
+
+.btn-danger {
+  background: rgba(220, 70, 90, .18);
+  border: 1px solid rgba(240, 110, 130, .4);
+  color: #ffb4c0;
+  border-radius: var(--radius-md);
+}
+.btn-danger:hover,
+.btn-danger:focus { background: rgba(220, 70, 90, .3); color: #fff; border-color: rgba(240, 110, 130, .6); }
 
 a {
-  color: #818cf8;
+  color: var(--accent-soft);
   text-decoration: none;
   font-weight: 600;
 }
+a:hover { text-decoration: underline; }
 
-a:hover {
-  text-decoration: underline;
+/* Alertas de Bootstrap en modo oscuro */
+.alert-danger {
+  background: rgba(220, 70, 90, .14);
+  border: 1px solid rgba(240, 110, 130, .35);
+  color: #ffc2cb;
+  border-radius: var(--radius-md);
 }
 
 /* Divisor 'o' */
@@ -117,63 +190,46 @@ a:hover {
   display: flex;
   align-items: center;
   text-align: center;
-  color: #64748b;
+  color: #6f7b92;
   font-size: 0.85rem;
 }
-
 .divider::before,
-.divider::after {
-  content: '';
-  flex: 1;
-  border-bottom: 1px solid #334155;
-}
-
-.divider span {
-  padding: 0 0.75rem;
-}
+.divider::after { content: ''; flex: 1; border-bottom: 1px solid var(--line); }
+.divider span { padding: 0 0.75rem; }
 
 /* Botón de Google */
 .btn-google {
-  background-color: #0f172a;
-  border: 1.5px solid #334155;
-  color: #f8fafc;
+  background-color: rgba(6, 9, 16, .55);
+  border: 1px solid var(--input-border);
+  color: var(--text-main);
   font-weight: 600;
-  border-radius: 0.65rem;
+  border-radius: var(--radius-md);
   padding: 0.65rem 1rem;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.6rem;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
+  transition: background-color .2s ease, border-color .2s ease;
   text-decoration: none;
 }
+.btn-google:hover { background-color: rgba(255, 255, 255, .06); border-color: var(--line-strong); color: #fff; }
+.btn-google:disabled { opacity: .6; }
 
-.btn-google:hover {
-  background-color: #1e293b;
-  border-color: #475569;
-  color: #ffffff;
-}
+.google-icon { width: 18px; height: 18px; }
 
-.google-icon {
-  width: 18px;
-  height: 18px;
-}
-/* Wordmark de Pilchak (usa la tipografía normal del sistema, definida en body) */
+/* Wordmark de Pilchak */
 .brand-wordmark {
   font-weight: 700;
   letter-spacing: .3em;
   color: var(--text-main);
 }
-
 .auth-card .brand-wordmark { font-size: 1.6rem; display: inline-block; margin-bottom: .25rem; }
 
 .auth-back { display: inline-block; margin-bottom: 1rem; font-size: .85rem; font-weight: 400; color: var(--text-muted); }
+.auth-back:hover { color: var(--text-main); }
 
-/* Logo de Pilchak (assets/img/logo.png). Base común a la pantalla de carga, el login y el registro.
-   - El PNG está recortado al dibujo (sin margen transparente), así la imagen mide lo que se ve.
-   - El dibujo es negro: sobre los fondos oscuros del sitio se pinta de blanco (filter). Para usar
-     otro logo a color, borrar la línea "filter".
-   - object-fit: contain + width/height del HTML: nunca se deforma ni se sale de su contenedor. */
+/* Logo (assets/img/logo.png): dibujo negro que se pinta de blanco sobre fondo oscuro.
+   object-fit: contain + max-width: nunca se deforma ni se sale de su contenedor. */
 .brand-logo {
   display: block;
   max-width: 100%;
@@ -181,25 +237,27 @@ a:hover {
   object-fit: contain;
   filter: brightness(0) invert(1);
 }
+.auth-logo { width: 88px; margin: 0 auto .75rem; }
 
-/* Tamaño en el login y el registro; centrado con margin auto */
-.auth-logo {
-  width: 88px;
-  margin: 0 auto .75rem;
+/* ---------------------------------------------------------------------
+   Páginas privadas (layout.php): barra superior y tarjetas
+   --------------------------------------------------------------------- */
+.app-navbar {
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  border-bottom: 1px solid var(--line);
+  padding-top: max(.5rem, env(safe-area-inset-top, 0px));
 }
 
-/* ---- Navbar de las páginas privadas (layout.php) ----
-   El navbar usa el fondo claro de Bootstrap (bg-body-secondary, #e9ecef). La marca NO debe usar
-   --text-main (casi blanco, pensado para fondos oscuros): sobre ese fondo daba 1.13:1 y solo se
-   leía al pasar el mouse. Se fija un color oscuro explícito, igual en todos los estados. */
 .navbar-wordmark,
 .navbar-wordmark:hover,
 .navbar-wordmark:focus {
   font-size: 1.25rem;
   font-weight: 700;
   letter-spacing: .3em;
-  color: #0f172a;        /* contraste ~14:1 sobre #e9ecef */
-  cursor: default;       /* no es cliqueable */
+  color: var(--text-main);
+  cursor: default;
   user-select: none;
 }
 
@@ -210,18 +268,42 @@ a:hover {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  color: #0f172a;
-  background-color: transparent;
+  color: var(--text-main);
+  background-color: var(--glass-hi);
+  border: 1px solid var(--line);
   text-decoration: none;
-  transition: background-color .2s ease, color .2s ease;
+  transition: background-color .2s ease, color .2s ease, border-color .2s ease;
 }
 .navbar-home:hover,
 .navbar-home:focus {
-  background-color: #0f172a;
-  color: #ffffff;        /* contraste ~17:1 */
+  background-color: rgba(255, 255, 255, .14);
+  border-color: var(--line-strong);
+  color: #fff;
   text-decoration: none;
 }
-.navbar-home:focus-visible {
-  outline: 3px solid #4f46e5;
-  outline-offset: 2px;
+.navbar-home:focus-visible { outline: 3px solid rgba(154, 167, 255, .6); outline-offset: 2px; }
+
+.app-navbar .btn.text-danger { color: #ff9aa9 !important; }
+
+/* Tarjetas de Bootstrap (listado de posts, etc.) */
+.card {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .015)),
+    var(--glass);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  border: 1px solid var(--line);
+  border-radius: 1.1rem;
+  color: var(--text-main);
+  box-shadow: var(--card-shadow);
+}
+.card-title a { color: var(--text-main); }
+.card-title a:hover { color: #fff; text-decoration: none; }
+.text-muted { color: var(--text-muted) !important; }
+
+.page-head h1 { font-size: clamp(1.4rem, 4vw, 2rem); margin-bottom: .25rem; }
+.page-head p { color: var(--text-muted); margin-bottom: 0; }
+
+@media (max-width: 575.98px) {
+  .auth-card { padding: 2rem 1.25rem; }
 }

@@ -1,490 +1,762 @@
-/* Landing de Pilchak: overlay de carga + feed vertical (tipo Reels) + modal.
-   Sin fuentes propias: hereda la tipografía del sistema definida en styles.css. */
+/* =====================================================================
+   Pilchak · Feed (landing.php): overlay de carga, feed vertical tipo Reels,
+   paneles laterales (solo escritorio) y modales.
+   Sin fuentes externas: usa la tipografía del sistema (styles.css).
 
-   :root {
-    --ease: cubic-bezier(.22, .61, .36, 1);
-    --stitch: #818cf8;
-    --like: #ff3b5c;
-    --wsp: #25d366;
-    --save: #fbbf24;
-    /* Ancho máximo de la columna del feed (en celular ocupa todo el ancho) */
-    --feed-width: 500px;
-    /* Altura aproximada de la barra inferior: la info y los botones de cada publicación se apoyan encima */
-    --nav-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
-    /* Tiempos del overlay: se ve ~1.3s y se desvanece en .5s (≈1.8s en total) */
-    --splash-hold: 1.3s;
-    --splash-fade: .5s;
-  }
-  
-  /* La página es solo el feed: el scroll vive dentro de #feed, no en el body */
-  .landing {
-    margin: 0;
-    background: #000;
-    overflow: hidden;
-    overscroll-behavior: none;
-  }
-  
-  /* ---- Overlay de carga ---- */
-  .splash {
-    position: fixed;
-    inset: 0;
-    z-index: 1000;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 1.5rem;
-    padding: 1.5rem;
-    background: #0f172a var(--bg-gradient);
-    animation: splash-out var(--splash-fade) ease var(--splash-hold) forwards;
-  }
-  
-  /* El PNG ya viene recortado al dibujo; .brand-logo (styles.css) lo contiene sin deformarlo */
-  .splash-logo {
-    width: min(150px, 40vw);
-    max-height: 28vh;
-    animation: logo-in .8s var(--ease) both;
-  }
-  
-  .splash-stitch {
-    display: block;
-    width: min(200px, 45vw);
-    height: 0;
-    border-top: 2px dashed var(--stitch);
-    transform-origin: left center;
-    animation: sew 1s var(--ease) .15s both;
-  }
-  
-  @keyframes logo-in {
-    from { opacity: 0; transform: scale(.94); }
-    to   { opacity: 1; transform: none; }
-  }
-  
-  @keyframes sew {
-    from { transform: scaleX(0); }
-    to   { transform: scaleX(1); }
-  }
-  
-  @keyframes splash-out {
-    to { opacity: 0; visibility: hidden; pointer-events: none; }
-  }
-  
-  /* ---- Iconos (sprite SVG de landing.php) ----
-     El trazo/relleno se define acá y no dentro de los <symbol>, para poder cambiarlo por estado (like activo, etc.). */
-  .feed-icon {
-    display: block;
-    width: 26px;
-    height: 26px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-  
-  /* ---- Feed vertical ----
-     #feed ocupa todo el ancho (así la rueda del mouse funciona en toda la pantalla)
-     y cada publicación se limita a 500px centrada: en celular ocupa todo el ancho. */
-  .feed {
-    height: 100vh;
-    height: 100dvh;
-    width: 100%;
-    overflow-y: scroll;
-    scroll-snap-type: y mandatory;
-    scroll-behavior: smooth;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
-    scrollbar-width: none;
-  }
-  .feed::-webkit-scrollbar { width: 0; }
-  .feed:focus-visible { outline: none; }
-  
-  .post {
-    position: relative;
-    height: 100vh;
-    height: 100dvh;
-    width: 100%;
-    max-width: var(--feed-width);
-    margin: 0 auto;
-    scroll-snap-align: start;
-    scroll-snap-stop: always;   /* evita saltarse publicaciones al deslizar fuerte */
-    overflow: hidden;
-    background: #111;
-    color: #fff;
-    touch-action: manipulation; /* sin zoom por doble toque: así el doble toque da "me gusta" */
-  }
-  
-  .post-media {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;          /* llena la pantalla sin deformar */
-  }
-  
-  /* Degradados para que el texto blanco se lea sobre cualquier foto */
-  .post::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background:
-      linear-gradient(to bottom, rgba(0, 0, 0, .55), transparent 22%),
-      linear-gradient(to top, rgba(0, 0, 0, .75), transparent 45%);
-  }
-  
-  /* Spinner centrado con flex (no con transform: el spinner de Bootstrap ya usa transform para girar) */
-  .post-spinner {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    pointer-events: none;
-    color: #fff;
-  }
-  
-  /* ---- Info del vendedor (abajo a la izquierda) ---- */
-  .post-info {
-    position: absolute;
-    z-index: 2;
-    left: 14px;
-    right: 84px;
-    bottom: calc(var(--nav-bottom) + 16px);
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-  .post-seller { font-weight: 700; font-size: 16px; }
-  .post-desc { margin: 4px 0 8px; font-size: 14px; line-height: 1.35; }
-  .post-price { font-size: 20px; font-weight: 800; }
-  .post-label { font-size: 13px; font-weight: 600; opacity: .85; }   /* "Precio:" / "Talla:" */
-  .post-size {
-    display: inline-block;
-    margin-left: 8px;
-    padding: 2px 8px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, .2);
-    font-size: 12px;
-  }
-  
-  /* ---- Acciones (a la derecha): perfil, me gusta, WhatsApp ---- */
-  .post-actions {
-    position: absolute;
-    z-index: 2;
-    right: 10px;
-    bottom: calc(var(--nav-bottom) + 26px);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 18px;
-  }
-  
-  /* Botones de icono + texto; son <button> o <a>, así que se anula el estilo global de los links (styles.css) */
-  .action-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-    padding: 0;
-    border: 0;
-    background: none;
-    color: #fff;
-    font-size: 12px;
-    font-weight: 400;
-    text-decoration: none;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .action-btn:hover,
-  .action-btn:focus { color: #fff; text-decoration: none; }
-  .action-btn .feed-icon {
-    width: 32px;
-    height: 32px;
-    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, .6));
-  }
-  
-  .action-like.is-active .feed-icon {
-    fill: var(--like);
-    stroke: var(--like);
-    animation: pop .3s;
-  }
-  .action-save.is-active .feed-icon {
-    fill: var(--save);
-    stroke: var(--save);
-    animation: pop .3s;
-  }
-  .action-wsp .feed-icon { fill: var(--wsp); stroke: none; }
-  
-  .post-avatar {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    padding: 0;
-    border: 2px solid #fff;
-    border-radius: 50%;
-    background: #444;
-    color: #fff;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .post-avatar .feed-icon { width: 24px; height: 24px; }
-  
-  @keyframes pop { 50% { transform: scale(1.35); } }
-  
-  /* Corazón grande que aparece con doble toque */
-  .like-burst {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    z-index: 3;
-    width: 110px;
-    height: 110px;
-    margin: -55px 0 0 -55px;
-    fill: var(--like);
-    stroke: none;
-    opacity: 0;
-    pointer-events: none;
-  }
-  .like-burst.is-playing { animation: latido .7s ease-out; }
-  
-  @keyframes latido {
-    0%   { opacity: 0; transform: scale(.4); }
-    30%  { opacity: 1; transform: scale(1.1); }
-    100% { opacity: 0; transform: scale(1.3); }
-  }
-  
-  /* ---- Barras superior e inferior (fijas, alineadas con la columna del feed) ----
-     La barra en sí no recibe toques (así no bloquea el scroll); solo sus botones. */
-  .feed-nav {
-    position: fixed;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 10;
-    width: 100%;
-    max-width: var(--feed-width);
-    display: flex;
-    align-items: center;
-    justify-content: space-around;
-    pointer-events: none;
-  }
-  .feed-nav > * { pointer-events: auto; }
-  
-  .feed-nav-top {
-    top: 0;
-    justify-content: space-between;   /* lupa a la izquierda, acceso a la cuenta a la derecha */
-    padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 10px;
-  }
-  .feed-nav-bottom {
-    bottom: 0;
-    padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
-    background: rgba(0, 0, 0, .85);
-  }
-  
-  .feed-nav-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 6px 18px;
-    border: 0;
-    background: none;
-    color: rgba(255, 255, 255, .7);
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .feed-nav-btn:hover,
-  .feed-nav-btn:focus { text-decoration: none; }   /* anula el subrayado global de los links (styles.css) */
-  .feed-nav-btn.is-active { color: #fff; }
-  .feed-nav-top .feed-icon { filter: drop-shadow(0 1px 3px rgba(0, 0, 0, .6)); }
-  
-  /* Botón central "publicar": rectángulo con un + */
-  .feed-nav-publish {
-    padding: 4px 16px;
-    border-radius: 10px;
-    background: #fff;
-    color: #000;
-  }
-  .feed-nav-publish:hover,
-  .feed-nav-publish:focus { color: #000; }
-  .feed-nav-publish .feed-icon { stroke-width: 2.5; }
-  
-  /* Acceso permanente al login (link normal, no necesita JS) */
-  .btn-feed-login {
-    background-color: rgba(15, 23, 42, .7);
-    border: 1.5px solid rgba(255, 255, 255, .3);
-    border-radius: 999px;
-    padding: .4rem 1rem;
-    font-size: .9rem;
-    font-weight: 600;
-    white-space: nowrap;
-    color: #fff;
-    -webkit-backdrop-filter: blur(6px);
-    backdrop-filter: blur(6px);
-  }
-  .btn-feed-login:hover,
-  .btn-feed-login:focus {
-    background-color: rgba(15, 23, 42, .9);
-    border-color: rgba(255, 255, 255, .55);
-    color: #fff;
-    text-decoration: none;
-  }
-  
-  /* En pantallas muy angostas el texto largo del botón de cuenta se achica en vez de desbordar */
-  @media (max-width: 359px) {
-    .btn-feed-login { font-size: .78rem; padding: .35rem .7rem; }
-    .feed-nav-btn { padding: 6px 10px; }
-  }
-  
-  /* Aviso temporal ("próximamente") */
-  .feed-toast {
-    position: fixed;
-    left: 50%;
-    top: calc(70px + env(safe-area-inset-top, 0px));
-    z-index: 20;
-    transform: translateX(-50%);
-    max-width: calc(100vw - 32px);
-    padding: 8px 16px;
-    border-radius: 20px;
-    background: rgba(0, 0, 0, .85);
-    color: #fff;
-    font-size: 14px;
-    white-space: nowrap;
-    opacity: 0;
-    transition: opacity .25s;
-    pointer-events: none;
-  }
-  .feed-toast.is-visible { opacity: 1; }
-  
-  /* ---- Publicación de texto (las de la API no traen imagen ni video) ---- */
-  .post-text {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 14px;
-    height: 100%;
-    /* arriba: barra superior; abajo/derecha: barra inferior y botones de acción */
-    padding: calc(70px + env(safe-area-inset-top, 0px)) 84px calc(var(--nav-bottom) + 90px) 24px;
-    background: linear-gradient(160deg, #1e1b4b 0%, #312e81 55%, #4338ca 100%);
-  }
-  .post-title {
-    margin: 0;
-    font-size: 1.6rem;
-    font-weight: 800;
-    line-height: 1.2;
-    color: #fff;
-    overflow-wrap: anywhere;
-  }
-  .post-body {
-    margin: 0;
-    min-height: 0;
-    overflow-y: auto;            /* si el texto es largo, se desplaza dentro de la tarjeta */
-    font-size: 1rem;
-    line-height: 1.5;
-    color: #e0e7ff;
-    white-space: pre-wrap;       /* respeta los saltos de línea escritos por la persona */
-    overflow-wrap: anywhere;
-  }
-  .post-date { margin-top: 2px; font-size: 12px; opacity: .8; }
-  
-  /* ---- Publicación real con foto o video: título destacado + descripción ---- */
-  .post-headline {
-    margin: 4px 0 2px;
-    font-size: 16px;
-    font-weight: 700;
-    overflow-wrap: anywhere;
-  }
-  
-  /* ---- Estado del feed: cargando / error ---- */
-  .feed-status {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 14px;
-    height: 100vh;
-    height: 100dvh;
-    padding: 24px;
-    text-align: center;
-    color: #fff;
-    scroll-snap-align: start;
-  }
-  .feed-status p { margin: 0; color: #cbd5e1; }
-  
-  /* ---- Modal ---- */
-  .join-modal {
-    background-color: var(--card-bg);
-    color: var(--text-main);
-    border: 1px solid var(--card-border);
-    border-radius: 1.25rem;
-    box-shadow: var(--card-shadow);
-  }
-  .join-modal p { color: #cbd5e1; }
-  .join-modal .btn:hover,
-  .join-modal .btn:focus { text-decoration: none; }
-  
-  .btn-guest {
-    background-color: transparent;
-    border: 1.5px solid var(--card-border);
-    border-radius: .65rem;
-    padding: .75rem 1rem;
-    font-weight: 600;
-    color: var(--text-main);
-  }
-  .btn-guest:hover,
-  .btn-guest:focus {
-    background-color: #0f172a;
-    border-color: #475569;
-    color: #fff;
-  }
-  
-  /* Formulario de publicación */
-  .join-modal .modal-title { color: var(--text-main); }
-  .join-modal .btn-close { opacity: .8; }
-  .join-modal textarea.form-control { resize: vertical; }
+   LAYOUT
+   - Escritorio (≥ 1024px): [paneles izq.] [feed flotante tipo celular] [paneles der.]
+   - Móvil / tablet vertical (< 1024px): paneles ocultos y feed a pantalla completa.
+   ===================================================================== */
+
+:root {
+  --ease: cubic-bezier(.22, .61, .36, 1);
+  --stitch: #8f9bf5;
+  --like: #ff4d6a;
+  --wsp: #2fcf6f;
+  --save: #f5c451;
+
+  /* Cómo se ajustan fotos/videos dentro de la publicación.
+     contain = se ve TODO el medio sin recortes; cover = llena la pantalla recortando los bordes. */
+  --media-fit: contain;
+
+  /* Altura/ancho del feed flotante (escritorio). Proporción 9:16, nunca más alto que la ventana */
+  --phone-h: min(900px, calc(100vh - 40px));
+  --phone-h: min(900px, calc(100dvh - 40px));
+  --phone-w: calc(var(--phone-h) * .5625);
+
+  /* Altura aproximada de la barra inferior: la info y los botones de cada publicación se apoyan encima */
+  --nav-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+
+  /* Tiempos del overlay: se ve ~1.3s y se desvanece en .5s (≈1.8s en total) */
+  --splash-hold: 1.3s;
+  --splash-fade: .5s;
+}
+
+/* La página es solo el feed: el scroll vive dentro de #feed, no en el body */
+.landing {
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* ---- Overlay de carga ---- */
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  background:
+    radial-gradient(50rem 34rem at 20% 15%, rgba(52, 92, 175, .22), transparent 62%),
+    radial-gradient(46rem 32rem at 85% 85%, rgba(86, 72, 178, .20), transparent 62%),
+    #05070d;
+  animation: splash-out var(--splash-fade) ease var(--splash-hold) forwards;
+}
+
+.splash-logo {
+  width: min(150px, 40vw);
+  max-height: 28vh;
+  animation: logo-in .8s var(--ease) both;
+}
+
+.splash-stitch {
+  display: block;
+  width: min(200px, 45vw);
+  height: 0;
+  border-top: 2px dashed var(--stitch);
+  transform-origin: left center;
+  animation: sew 1s var(--ease) .15s both;
+}
+
+@keyframes logo-in { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
+@keyframes sew     { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes splash-out { to { opacity: 0; visibility: hidden; pointer-events: none; } }
+
+/* ---- Iconos (sprite SVG de landing.php) ---- */
+.feed-icon {
+  display: block;
+  width: 26px;
+  height: 26px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* =====================================================================
+   ESTRUCTURA: app-shell (3 columnas en escritorio)
+   ===================================================================== */
+.app-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--phone-w) minmax(0, 1fr);
+  grid-template-areas: "left phone right";
+  align-items: center;
+  height: 100vh;
+  height: 100dvh;
+  padding: 20px 0;
+}
+
+.phone {
+  grid-area: phone;
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  height: var(--phone-h);
+  overflow: hidden;
+  background: #05070d;
+  border: 1px solid rgba(205, 215, 235, .26);
+  border-radius: 34px;
+  box-shadow:
+    0 0 0 6px rgba(14, 19, 31, .6),
+    0 0 0 7px rgba(205, 215, 235, .08),
+    0 34px 90px rgba(0, 0, 0, .65),
+    0 0 70px rgba(90, 120, 220, .10);
+}
+
+/* ---- Paneles laterales ---- */
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: min(100%, 330px);
+  max-height: 100%;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: 4px 0;
+}
+.side::-webkit-scrollbar { width: 0; }
+.side-left  { grid-area: left;  justify-self: end;   margin-right: clamp(16px, 2.6vw, 44px); }
+.side-right { grid-area: right; justify-self: start; margin-left:  clamp(16px, 2.6vw, 44px); }
+
+.glass-card {
+  position: relative;
+  padding: 18px 20px;
+  color: var(--text-main);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, .075), rgba(255, 255, 255, .015)),
+    var(--glass);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .07);
+}
+
+.card-kicker {
+  margin: 0 0 10px;
+  font-size: .95rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  color: var(--text-main);
+  line-height: 1.25;
+}
+
+/* Tarjeta "Plataforma PK" */
+.card-brand { text-align: center; padding: 22px 20px 20px; }
+.card-brand .brand-logo { width: min(120px, 55%); margin: 0 auto 12px; opacity: .88; }
+.card-brand-title { margin: 0; font-size: 1.35rem; font-weight: 800; letter-spacing: .02em; color: #eef2fb; }
+.card-brand-sub {
+  margin: 6px 0 0;
+  font-family: var(--font-mono);
+  font-size: .82rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+/* Tarjeta "Colaborar" */
+.card-collab-text { margin: 0 0 16px; font-size: .98rem; line-height: 1.4; color: #c4cde0; }
+
+/* Botón Mercado Pago: mismo estilo que el diseño pero con brillo atenuado */
+.btn-mp {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(150, 185, 220, .28);
+  background: linear-gradient(180deg, rgba(180, 200, 225, .16), rgba(90, 110, 140, .10));
+  color: #c3ccdc;
+  font-size: .92rem;
+  font-weight: 600;
+  letter-spacing: .03em;
+  text-decoration: none;
+  box-shadow: 0 0 12px rgba(0, 150, 220, .10), inset 0 1px 0 rgba(255, 255, 255, .07);
+  opacity: .9;
+  transition: opacity .2s ease, box-shadow .2s ease, border-color .2s ease, transform .2s ease;
+}
+.btn-mp:hover,
+.btn-mp:focus-visible {
+  opacity: 1;
+  color: #e3e9f4;
+  text-decoration: none;
+  border-color: rgba(160, 200, 235, .42);
+  box-shadow: 0 0 18px rgba(0, 150, 220, .18), inset 0 1px 0 rgba(255, 255, 255, .1);
+  transform: translateY(-1px);
+}
+.btn-mp:focus-visible { outline: 2px solid rgba(154, 167, 255, .7); outline-offset: 2px; }
+.mp-logo { width: 34px; height: 24px; flex: none; opacity: .85; }
+.mp-word { font-size: .62rem; line-height: 1; font-weight: 700; color: #6ab4e0; text-align: left; letter-spacing: 0; text-transform: lowercase; }
+
+/* Tarjeta "Información del proyecto" (usa <details>: se pliega sin JS) */
+.card-info { padding: 12px; }
+.card-info summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  list-style: none;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .05);
+  font-size: .95rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  color: var(--text-main);
+}
+.card-info summary::-webkit-details-marker { display: none; }
+.card-info summary::after {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translate(-2px, -2px);
+  transition: transform .2s ease;
+}
+.card-info[open] summary::after { transform: rotate(-135deg); }
+.card-info summary:focus-visible { outline: 2px solid rgba(154, 167, 255, .7); outline-offset: 2px; }
+.card-info-body { padding: 12px 8px 4px; font-family: var(--font-mono); font-size: .9rem; }
+.info-label { margin: 0 0 2px; color: var(--text-muted); font-size: .9rem; }
+.info-value { margin: 0 0 12px; color: #e1e7f3; font-weight: 700; overflow-wrap: anywhere; }
+.info-devs { margin: 0 0 12px; padding: 0; list-style: none; color: #e1e7f3; font-weight: 700; line-height: 1.45; }
+.info-devs li::before { content: "•"; margin-right: 8px; color: var(--text-muted); }
+
+.repo-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  color: #98a5bd;
+  font-family: var(--font-mono);
+  font-size: .85rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: color .2s ease;
+}
+.repo-link:hover, .repo-link:focus-visible { color: #e8edf8; text-decoration: none; }
+.repo-link .brand-icon { width: 34px; height: 34px; flex: none; }
+.repo-link span { min-width: 0; overflow-wrap: anywhere; }
+
+/* Tarjeta "Redes sociales" */
+.social-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0 4px;
+  padding: 0;
+  list-style: none;
+}
+.social-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  color: #aab4c8;
+  border-radius: 14px;
+  transition: color .2s ease, background-color .2s ease, transform .2s ease;
+}
+.social-link:hover, .social-link:focus-visible {
+  color: #f1f4fb;
+  background-color: rgba(255, 255, 255, .07);
+  transform: translateY(-2px);
+  text-decoration: none;
+}
+.social-link:focus-visible { outline: 2px solid rgba(154, 167, 255, .7); outline-offset: 2px; }
+.brand-icon { display: block; width: 78%; height: 78%; max-width: 46px; max-height: 46px; fill: currentColor; stroke: none; }
+
+/* =====================================================================
+   FEED VERTICAL
+   #feed es el contenedor con scroll y cada .post mide exactamente lo mismo que él
+   (height: 100%): feed.js navega con teclado usando feed.clientHeight.
+   ===================================================================== */
+.feed {
+  height: 100%;
+  width: 100%;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.feed::-webkit-scrollbar { width: 0; }
+.feed:focus-visible { outline: none; }
+
+.post {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;   /* evita saltarse publicaciones al deslizar fuerte */
+  overflow: hidden;
+  background: #070a12;
+  color: #fff;
+  touch-action: manipulation; /* sin zoom por doble toque: así el doble toque da "me gusta" */
+}
+
+.post-media {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: var(--media-fit);   /* ver --media-fit arriba: nunca se deforma */
+  object-position: center;
+  background: #05070d;
+}
+
+/* Degradados para que el texto blanco se lea sobre cualquier foto */
+.post::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(to bottom, rgba(0, 0, 0, .55), transparent 22%),
+    linear-gradient(to top, rgba(0, 0, 0, .78), transparent 45%);
+}
+
+.post-spinner {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  color: #fff;
+}
+
+/* ---- Info del vendedor (abajo a la izquierda) ---- */
+.post-info {
+  position: absolute;
+  z-index: 2;
+  left: 16px;
+  right: 84px;
+  bottom: calc(var(--nav-bottom) + 16px);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.post-seller { font-weight: 700; font-size: 16px; }
+.post-desc { margin: 4px 0 8px; font-size: 14px; line-height: 1.35; color: #e6ebf6; }
+.post-price { font-size: 20px; font-weight: 800; }
+.post-label { font-size: 13px; font-weight: 600; opacity: .85; }
+.post-size {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 9px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .16);
+  border: 1px solid rgba(255, 255, 255, .12);
+  font-size: 12px;
+}
+
+/* ---- Acciones (a la derecha): perfil, me gusta, comentar, guardar, WhatsApp ---- */
+.post-actions {
+  position: absolute;
+  z-index: 2;
+  right: 10px;
+  bottom: calc(var(--nav-bottom) + 26px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 400;
+  text-decoration: none;
+  cursor: pointer;
+}
+.action-btn:hover,
+.action-btn:focus { color: #fff; text-decoration: none; }
+.action-btn .feed-icon { width: 32px; height: 32px; filter: drop-shadow(0 1px 3px rgba(0, 0, 0, .6)); }
+
+.action-like.is-active .feed-icon { fill: var(--like); stroke: var(--like); animation: pop .3s; }
+.action-save.is-active .feed-icon { fill: var(--save); stroke: var(--save); animation: pop .3s; }
+.action-wsp .feed-icon { fill: var(--wsp); stroke: none; }
+
+.post-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 2px solid rgba(255, 255, 255, .85);
+  border-radius: 50%;
+  background: rgba(40, 48, 66, .8);
+  color: #fff;
+  cursor: pointer;
+}
+.post-avatar .feed-icon { width: 24px; height: 24px; }
+
+@keyframes pop { 50% { transform: scale(1.35); } }
+
+/* Corazón grande que aparece con doble toque */
+.like-burst {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 3;
+  width: 110px;
+  height: 110px;
+  margin: -55px 0 0 -55px;
+  fill: var(--like);
+  stroke: none;
+  opacity: 0;
+  pointer-events: none;
+}
+.like-burst.is-playing { animation: latido .7s ease-out; }
+@keyframes latido {
+  0%   { opacity: 0; transform: scale(.4); }
+  30%  { opacity: 1; transform: scale(1.1); }
+  100% { opacity: 0; transform: scale(1.3); }
+}
+
+/* ---- Barras superior e inferior (dentro del feed flotante) ----
+   La barra en sí no recibe toques (así no bloquea el scroll); solo sus botones. */
+.feed-nav {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  pointer-events: none;
+}
+.feed-nav > * { pointer-events: auto; }
+
+.feed-nav-top {
+  top: 0;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: calc(12px + env(safe-area-inset-top, 0px)) 14px 10px;
+}
+.feed-nav-top [data-nav="search"] { margin-right: auto; }
+
+.feed-nav-bottom {
+  bottom: 0;
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+  background: rgba(5, 8, 14, .82);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border-top: 1px solid rgba(205, 215, 235, .10);
+}
+
+.feed-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 18px;
+  border: 0;
+  background: none;
+  color: rgba(255, 255, 255, .68);
+  cursor: pointer;
+  transition: color .2s ease;
+}
+.feed-nav-btn:hover,
+.feed-nav-btn:focus { color: #fff; text-decoration: none; }
+.feed-nav-btn.is-active { color: #fff; }
+.feed-nav-top .feed-icon { filter: drop-shadow(0 1px 3px rgba(0, 0, 0, .6)); }
+.feed-nav-btn:focus-visible { outline: 2px solid rgba(154, 167, 255, .8); outline-offset: 2px; border-radius: 10px; }
+
+/* Botón central "publicar": rectángulo con un + */
+.feed-nav-publish {
+  padding: 4px 18px;
+  border-radius: 10px;
+  background: #f4f6fb;
+  color: #05070d;
+  box-shadow: 0 0 18px rgba(200, 215, 255, .14);
+}
+.feed-nav-publish:hover,
+.feed-nav-publish:focus { color: #000; background: #fff; }
+.feed-nav-publish .feed-icon { stroke-width: 2.5; }
+
+/* Acceso permanente al login (link normal, no necesita JS) */
+.btn-feed-login {
+  background-color: rgba(10, 14, 24, .55);
+  border: 1.5px solid rgba(205, 215, 235, .38);
+  border-radius: 999px;
+  padding: .4rem 1rem;
+  font-size: .9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: #f1f4fb;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.btn-feed-login:hover,
+.btn-feed-login:focus {
+  background-color: rgba(22, 30, 48, .75);
+  border-color: rgba(220, 228, 245, .6);
+  color: #fff;
+  text-decoration: none;
+}
+
+/* Accesos extra de la barra superior: solo existen en móvil/tablet (en escritorio están en los paneles) */
+.feed-donate-mini,
+.nav-top-profile,
+.nav-top-publish { display: none; }
+
+/* Aviso temporal ("próximamente") */
+.feed-toast {
+  position: fixed;
+  left: 50%;
+  top: calc(70px + env(safe-area-inset-top, 0px));
+  z-index: 1100;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 32px);
+  padding: 8px 16px;
+  border-radius: 20px;
+  background: rgba(12, 17, 29, .92);
+  border: 1px solid var(--line);
+  color: #fff;
+  font-size: 14px;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity .25s;
+  pointer-events: none;
+}
+.feed-toast.is-visible { opacity: 1; }
+
+/* ---- Publicación de texto (las de la API no traen imagen ni video) ---- */
+.post-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 14px;
+  height: 100%;
+  padding: calc(70px + env(safe-area-inset-top, 0px)) 84px calc(var(--nav-bottom) + 90px) 24px;
+  background:
+    radial-gradient(30rem 20rem at 20% 10%, rgba(90, 110, 220, .22), transparent 65%),
+    linear-gradient(160deg, #0a0e1c 0%, #141a36 55%, #1d2347 100%);
+}
+.post-title {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #f3f6ff;
+  overflow-wrap: anywhere;
+}
+.post-body {
+  margin: 0;
+  min-height: 0;
+  overflow-y: auto;            /* si el texto es largo, se desplaza dentro de la tarjeta */
+  font-size: 1rem;
+  line-height: 1.5;
+  color: #c5cee6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.post-date { margin-top: 2px; font-size: 12px; opacity: .75; }
+
+.post-headline { margin: 4px 0 2px; font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
+
+/* ---- Estado del feed: cargando / error ---- */
+.feed-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  height: 100%;
+  padding: 24px;
+  text-align: center;
+  color: #fff;
+  scroll-snap-align: start;
+}
+.feed-status p { margin: 0; color: #c0c9dd; }
+
+/* ---- Modales (glassmorphism oscuro) ---- */
+.join-modal {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .01)),
+    rgba(12, 17, 29, .94);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  color: var(--text-main);
+  border: 1px solid var(--line);
+  border-radius: 1.4rem;
+  box-shadow: var(--card-shadow);
+}
+.join-modal p { color: #b9c3d9; }
+.join-modal .btn:hover,
+.join-modal .btn:focus { text-decoration: none; }
+
+.btn-guest {
+  background-color: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: .8rem;
+  padding: .75rem 1rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+.btn-guest:hover,
+.btn-guest:focus { background-color: rgba(255, 255, 255, .07); border-color: rgba(225, 232, 248, .5); color: #fff; }
+
+.join-modal .modal-title { color: var(--text-main); }
+.join-modal .btn-close { opacity: .8; }
+.join-modal textarea.form-control { resize: vertical; }
   /* El <form> envuelve cabecera, cuerpo y pie dentro de .modal-content. Sin esto el formulario crece más que la
      pantalla (y más aún con la caja de errores) y Bootstrap no llega a hacer scroll en .modal-body: queda cortado.
      Así el form ocupa el alto disponible, el título y el botón quedan fijos y solo el cuerpo se desliza. */
-  .join-modal > form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; max-height: 100%; }
-  .publish-hint { color: var(--text-muted); }
-  
-  .btn:focus-visible { outline: 3px solid #c7d2fe; outline-offset: 3px; }
-  
-  /* ---- Movimiento reducido: sin animaciones, solo un fade corto ---- */
-  @media (prefers-reduced-motion: reduce) {
-    :root { --splash-hold: .6s; --splash-fade: .25s; }
-    .splash-logo, .splash-stitch { animation: none; }
-    .feed { scroll-behavior: auto; }
-    .action-like.is-active .feed-icon,
-    .action-save.is-active .feed-icon { animation: none; }
-  }
-  
-  /* ---- Formulario de publicar: archivo elegido ---- */
-  .publish-file {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-top: 6px;
-    color: var(--text-main);
-  }
-  .publish-file span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .publish-file .btn-link { color: #a5b4fc; flex: none; }
+.join-modal > form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; max-height: 100%; }
+.publish-hint { color: var(--text-muted); }
 
-  /* ---- Comentarios (modal) ---- */
-  .comments-status { color: var(--text-muted); }
-  .comments-status:empty { display: none; }
-  .comments-list { display: flex; flex-direction: column; gap: 14px; }
-  .comment-head { display: flex; align-items: baseline; gap: 8px; }
-  .comment-author { font-size: 14px; font-weight: 600; color: var(--text-main); }
-  .comment-date { font-size: 12px; color: var(--text-muted); }
-  .comment-body {
-    margin: 2px 0 0;
-    font-size: 14px;
-    white-space: pre-wrap;        /* respeta los saltos de línea que escribió la persona */
-    overflow-wrap: anywhere;      /* una palabra larguísima no rompe el modal */
+.btn:focus-visible { outline: 3px solid rgba(154, 167, 255, .65); outline-offset: 3px; }
+
+/* ---- Formulario de publicar: archivo elegido ---- */
+.publish-file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+  color: var(--text-main);
+}
+.publish-file span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.publish-file .btn-link { color: #aab4ff; flex: none; }
+
+/* ---- Comentarios (modal) ---- */
+.comments-status { color: var(--text-muted); }
+.comments-status:empty { display: none; }
+.comments-list { display: flex; flex-direction: column; gap: 14px; }
+.comment-head { display: flex; align-items: baseline; gap: 8px; }
+.comment-author { font-size: 14px; font-weight: 600; color: var(--text-main); }
+.comment-date { font-size: 12px; color: var(--text-muted); }
+.comment-body { margin: 2px 0 0; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.comments-footer form { width: 100%; }
+.comments-footer textarea { resize: none; }
+.comments-footer textarea::placeholder { color: var(--text-muted); opacity: 1; }
+.comments-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
+
+/* =====================================================================
+   RESPONSIVE
+   ===================================================================== */
+
+/* Escritorios bajos: paneles más compactos para que no se corten */
+@media (min-width: 1024px) and (max-height: 760px) {
+  .side { gap: 12px; }
+  .glass-card { padding: 14px 16px; border-radius: 18px; }
+  .card-brand .brand-logo { width: min(86px, 40%); margin-bottom: 8px; }
+  .card-brand-title { font-size: 1.15rem; }
+  .card-info-body { font-size: .82rem; }
+}
+
+/* Móvil y tablet vertical: SIN paneles, feed a pantalla completa */
+@media (max-width: 1023.98px) {
+  .app-shell {
+    display: block;
+    height: 100vh;
+    height: 100dvh;
+    padding: 0;
   }
-  .comments-footer form { width: 100%; }
-  .comments-footer textarea { resize: none; }
-  .comments-footer textarea::placeholder { color: var(--text-muted); opacity: 1; }
-  .comments-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
+  .side { display: none; }
+  .phone {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  /* Accesos de la barra superior que en escritorio viven en los paneles */
+  .feed-donate-mini {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 40px;
+    height: 36px;
+    padding: 0 9px;
+    border-radius: 999px;
+    border: 1.5px solid rgba(150, 185, 220, .32);
+    background: rgba(10, 14, 24, .55);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    color: #c3ccdc;
+    font-size: .8rem;
+    font-weight: 600;
+    text-decoration: none;
+    opacity: .92;
+  }
+  .feed-donate-mini:hover,
+  .feed-donate-mini:focus { color: #fff; text-decoration: none; opacity: 1; }
+  .feed-donate-mini:focus-visible { outline: 2px solid rgba(154, 167, 255, .8); outline-offset: 2px; }
+  .feed-donate-mini .mp-logo { width: 26px; height: 18px; }
+  .feed-donate-mini span { display: none; }
+
+  .nav-top-profile,
+  .nav-top-publish {
+    display: inline-flex;
+    width: 38px;
+    height: 36px;
+    padding: 0;
+    border-radius: 999px;
+    border: 1.5px solid rgba(205, 215, 235, .34);
+    background: rgba(10, 14, 24, .55);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    color: #f1f4fb;
+  }
+  .nav-top-profile .feed-icon,
+  .nav-top-publish .feed-icon { width: 20px; height: 20px; }
+
+  /* Textos de las tarjetas de texto: en tablets no se estiran a todo el ancho */
+  .post-text > * { width: 100%; max-width: 640px; margin-left: auto; margin-right: auto; }
+}
+
+@media (min-width: 420px) and (max-width: 1023.98px) {
+  .feed-donate-mini span { display: inline; }
+}
+
+/* Pantallas muy angostas: el texto largo del botón de cuenta se achica en vez de desbordar */
+@media (max-width: 359px) {
+  .btn-feed-login { font-size: .78rem; padding: .35rem .7rem; }
+  .feed-nav-btn { padding: 6px 10px; }
+  .feed-nav-top { gap: 6px; padding-left: 10px; padding-right: 10px; }
+}
+
+/* ---- Movimiento reducido: sin animaciones, solo un fade corto ---- */
+@media (prefers-reduced-motion: reduce) {
+  :root { --splash-hold: .6s; --splash-fade: .25s; }
+  .splash-logo, .splash-stitch { animation: none; }
+  .feed { scroll-behavior: auto; }
+  .action-like.is-active .feed-icon,
+  .action-save.is-active .feed-icon { animation: none; }
+  .btn-mp, .social-link { transition: none; }
+}

@@ -67,11 +67,12 @@ $maxProfile = upload_limit_bytes(UPLOAD_MAX_PROFILE_IMAGE);
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#05070d">
     <title>Perfil · Pilchak</title>
     <link rel="stylesheet" href="/assets/css/profile.css">
 </head>
-<body>
+<body class="profile-page">
 <main class="profile">
 
     <!-- Navegación mínima: volver al feed y cerrar sesión (POST con token CSRF) -->

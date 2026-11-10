@@ -1,108 +1,180 @@
+/* =====================================================================
+   Pilchak · Perfil de usuario (profile/index.php)
+   Misma línea que el feed: fondo oscuro con destellos, tarjeta glass,
+   bordes finos, esquinas redondeadas y neones apagados.
+   Archivo autocontenido (esta vista no carga styles.css).
+   ===================================================================== */
 :root {
-    --bg: #ffffff;
-    --text: #161823;
-    --muted: #6b6d78;
-    --line: #e6e6ea;
-    --brand: #8a4b2a;
-    --cover: #d9cfe8;
+    --bg: #05070d;
+    --text: #e8edf8;
+    --muted: #8d99b0;
+    --line: rgba(190, 202, 225, .16);
+    --line-strong: rgba(205, 215, 235, .30);
+    --brand: #6f7df2;
+    --brand-hover: #5d6be0;
+    --glass: rgba(14, 19, 32, .66);
+    --glass-hi: rgba(255, 255, 255, .06);
+    --cover: #1a2145;
+    --font-mono: ui-monospace, "JetBrains Mono", "Roboto Mono", SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-* { box-sizing: border-box; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
 body {
     margin: 0;
+    min-height: 100vh;
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     color: var(--text);
-    background: var(--bg);
+    background-color: var(--bg);
+    background-image:
+        radial-gradient(60rem 38rem at 12% 8%,  rgba(52, 92, 175, .20), transparent 62%),
+        radial-gradient(52rem 36rem at 92% 88%, rgba(86, 72, 178, .17), transparent 62%),
+        linear-gradient(160deg, #05070d 0%, #0a0f1c 55%, #060912 100%);
+    background-attachment: fixed;
 }
 
-.profile { max-width: 480px; margin: 0 auto; }
+/* Destellos desenfocados detrás del contenido */
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    filter: blur(6px);
+    background:
+        radial-gradient(circle at 11% 16%, rgba(120, 160, 255, .20) 0 34px, transparent 110px),
+        radial-gradient(circle at 21% 56%, rgba(130, 170, 255, .12) 0 26px, transparent 90px),
+        radial-gradient(circle at 90% 26%, rgba(140, 150, 255, .16) 0 44px, transparent 130px),
+        radial-gradient(circle at 80% 80%, rgba(110, 130, 230, .12) 0 30px, transparent 100px);
+}
+
+/* Tarjeta principal (glass), centrada y flotante en escritorio */
+.profile {
+    position: relative;
+    max-width: 520px;
+    margin: 24px auto;
+    overflow: hidden;
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .01)),
+        var(--glass);
+    -webkit-backdrop-filter: blur(16px) saturate(120%);
+    backdrop-filter: blur(16px) saturate(120%);
+    border: 1px solid rgba(205, 215, 235, .22);
+    border-radius: 30px;
+    box-shadow:
+        0 0 0 6px rgba(14, 19, 31, .55),
+        0 30px 80px rgba(0, 0, 0, .6),
+        0 0 60px rgba(90, 120, 220, .08);
+}
 
 /* Cabecera */
-.profile__head { text-align: center; padding-bottom: 16px; }
+.profile__head { text-align: center; padding-bottom: 18px; }
 
 .profile__cover {
-    height: 140px;
-    background: var(--cover) center / cover no-repeat;
+    position: relative;
+    height: 150px;
+    background: linear-gradient(135deg, var(--cover), #2a2058) center / cover no-repeat;
+}
+/* Degradado inferior para fundir la portada con la tarjeta */
+.profile__cover::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to bottom, rgba(5, 7, 13, .0) 40%, rgba(10, 14, 26, .75));
 }
 
 .profile__avatar {
+    position: relative;
     width: 96px;
     height: 96px;
     margin: -48px auto 0;
     border-radius: 50%;
-    border: 4px solid var(--bg);
-    background: #ece4f5;
+    border: 3px solid rgba(205, 215, 235, .55);
+    background: #141a30;
     overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 28px;
     font-weight: 600;
+    color: var(--text);
+    box-shadow: 0 0 0 5px rgba(10, 14, 26, .8), 0 8px 28px rgba(0, 0, 0, .5);
 }
 .profile__avatar img { width: 100%; height: 100%; object-fit: cover; }
 
-.profile__name { margin: 10px 0 2px; font-size: 18px; }
-.profile__bio  { margin: 0 24px 14px; color: var(--muted); font-size: 14px; }
+.profile__name { margin: 12px 0 2px; font-size: 18px; letter-spacing: .01em; overflow-wrap: anywhere; padding: 0 16px; }
+.profile__bio  { margin: 0 24px 16px; color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
 
 .profile__stats {
     list-style: none;
     display: flex;
     justify-content: center;
-    gap: 24px;
+    flex-wrap: wrap;
+    gap: 12px 28px;
     padding: 0;
-    margin: 0 0 14px;
+    margin: 0 0 16px;
     font-size: 12px;
     color: var(--muted);
 }
-.profile__stats strong { display: block; font-size: 16px; color: var(--text); }
+.profile__stats strong { display: block; font-size: 17px; color: var(--text); font-family: var(--font-mono); }
 
 /* Botones */
 .btn {
     font: inherit;
     font-size: 14px;
     padding: 8px 18px;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    background: var(--bg);
+    border: 1px solid var(--line-strong);
+    border-radius: 12px;
+    background: var(--glass-hi);
     color: var(--text);
     cursor: pointer;
+    text-decoration: none;
+    transition: background-color .2s ease, border-color .2s ease, transform .2s ease;
 }
-.btn:hover { background: #f5f5f7; }
-.btn--primary { background: var(--brand); border-color: var(--brand); color: #fff; }
-.btn--primary:hover { background: #733d22; }
-.btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.btn:hover { background: rgba(255, 255, 255, .11); border-color: rgba(225, 232, 248, .45); }
+.btn--primary {
+    background: linear-gradient(180deg, #7684f4, #5f6de0);
+    border-color: rgba(170, 182, 255, .4);
+    color: #fff;
+    box-shadow: 0 6px 20px -8px rgba(111, 125, 242, .6);
+}
+.btn--primary:hover { background: linear-gradient(180deg, #7f8cf6, #6573e6); }
+.btn:focus-visible { outline: 2px solid rgba(154, 167, 255, .8); outline-offset: 2px; }
 
 /* Pestañas */
-.tabs { display: flex; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.tabs { display: flex; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: rgba(255, 255, 255, .02); }
 .tabs__item {
     flex: 1;
     text-align: center;
-    padding: 10px 0;
+    padding: 12px 0;
     font-size: 14px;
     color: var(--muted);
 }
-.tabs__item--active { color: var(--text); font-weight: 600; border-bottom: 2px solid var(--text); }
+.tabs__item--active { color: var(--text); font-weight: 600; border-bottom: 2px solid var(--brand); }
 
 /* Grilla de publicaciones */
-.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding-top: 2px; }
+.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; padding: 3px; }
 
 .tile {
+    position: relative;
     aspect-ratio: 3 / 4;
     padding: 8px;
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
     overflow: hidden;
+    border-radius: 10px;
+    border: 1px solid rgba(190, 202, 225, .08);
 }
-.tile__title { margin: 0; font-size: 13px; line-height: 1.2; }
-.tile__text  { margin: 4px 0 0; font-size: 11px; opacity: .8; }
+.tile__title { margin: 0; font-size: 13px; line-height: 1.2; overflow-wrap: anywhere; }
+.tile__text  { margin: 4px 0 0; font-size: 11px; opacity: .8; overflow-wrap: anywhere; }
 
-.tile--0 { background: #fbeed3; color: #5a3a07; }
-.tile--1 { background: #dcefd0; color: #26470f; }
-.tile--2 { background: #f7d9d9; color: #6d1f1f; }
-.tile--3 { background: #d6e7f8; color: #123e68; }
-.tile--4 { background: #e4def6; color: #3a2f80; }
+/* Miniaturas de texto: tonos oscuros apagados (antes pasteles) */
+.tile--0 { background: linear-gradient(160deg, #1c1830, #2a2146); color: #ddd5f6; }
+.tile--1 { background: linear-gradient(160deg, #0f2230, #17344a); color: #cfe6f5; }
+.tile--2 { background: linear-gradient(160deg, #271726, #3d2038); color: #f1d4ee; }
+.tile--3 { background: linear-gradient(160deg, #101a36, #1b2a5a); color: #d2dcf8; }
+.tile--4 { background: linear-gradient(160deg, #13232b, #1c3a40); color: #d0eceb; }
 
 /* Estado vacío */
 .empty { text-align: center; padding: 48px 24px; }
@@ -111,38 +183,75 @@ body {
 
 /* Avisos */
 .notice { margin: 0; padding: 10px 16px; font-size: 14px; text-align: center; }
-.notice--ok    { background: #e3f4e0; color: #1f5a14; }
-.notice--error { background: #fbe3e3; color: #7a1d1d; }
+.notice--ok    { background: rgba(60, 170, 110, .16); color: #b8f0d0; border-bottom: 1px solid rgba(90, 200, 140, .3); }
+.notice--error { background: rgba(220, 70, 90, .16);  color: #ffc2cb; border-bottom: 1px solid rgba(240, 110, 130, .3); }
 
 /* Ventana de edición */
 .dialog {
     width: min(92vw, 380px);
-    border: 1px solid var(--line);
-    border-radius: 12px;
     padding: 20px;
+    color: var(--text);
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .01)),
+        rgba(12, 17, 29, .96);
+    border: 1px solid var(--line-strong);
+    border-radius: 22px;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, .6);
 }
-.dialog::backdrop { background: rgba(0, 0, 0, .45); }
+.dialog::backdrop { background: rgba(0, 0, 0, .6); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
 .dialog h2 { margin: 0 0 12px; font-size: 17px; }
 .dialog label { display: block; margin: 14px 0 6px; font-size: 13px; color: var(--muted); }
-.dialog input[type="file"] { width: 100%; font-size: 13px; }
+.dialog input[type="file"] { width: 100%; font-size: 13px; color: var(--text); }
+.dialog input[type="file"]::file-selector-button {
+    margin-right: 10px;
+    padding: 6px 12px;
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    background: var(--glass-hi);
+    color: var(--text);
+    cursor: pointer;
+}
 .hint { margin: 12px 0 0; font-size: 12px; color: var(--muted); }
 .dialog__actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
 
-/* ---- Agregados de la integración con Pilchak ---- */
+/* ---- Integración con Pilchak ---- */
 
 /* Barra mínima: volver al feed / cerrar sesión */
-.profile__bar { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; }
+.profile__bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px; }
 .profile__bar form { margin: 0; }
-.profile__bar .btn { text-decoration: none; display: inline-block; }
+.profile__bar .btn { display: inline-block; }
 
-/* Miniaturas con imagen o video de la publicación */
-.tile { position: relative; }
+/* Miniaturas con imagen o video de la publicación (cover: llena la miniatura sin deformar) */
 .tile__media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .tile--media::after {
     content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(to top, rgba(0, 0, 0, .65), rgba(0, 0, 0, 0) 60%);
+    background: linear-gradient(to top, rgba(0, 0, 0, .7), rgba(0, 0, 0, 0) 60%);
 }
 .tile--media .tile__title,
 .tile--media .tile__text { position: relative; z-index: 1; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, .8); }
+
+/* ---- Responsive ---- */
+/* Celulares: la tarjeta ocupa toda la pantalla, igual que el feed */
+@media (max-width: 560px) {
+    .profile {
+        max-width: none;
+        min-height: 100vh;
+        min-height: 100dvh;
+        margin: 0;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .profile__bar { padding-top: calc(12px + env(safe-area-inset-top, 0px)); }
+}
+
+/* Pantallas muy angostas */
+@media (max-width: 359px) {
+    .grid { gap: 2px; padding: 2px; }
+    .tile { padding: 6px; border-radius: 8px; }
+    .tile__text { display: none; }
+    .btn { padding: 8px 12px; font-size: 13px; }
+}
