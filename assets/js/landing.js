@@ -45,6 +45,8 @@
   var feed = document.getElementById('feed');
   if (!feed) { return; }
 
+  // (Las flechas ^ y v del feed viven en feed.js, sección "Flechas ^ y v".)
+
   // ---------- Barras de navegación ----------
   // "publish" (con sesión) lo gestiona publish.js; "+" de invitados es un link normal.
   document.querySelectorAll('[data-nav]').forEach(function (btn) {

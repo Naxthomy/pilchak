@@ -1,8 +1,11 @@
 <?php
+// LISTADO DE POSTS (vista privada). Recibe $posts desde src/controllers/posts/index.php.
+// Usa el layout privado (barra superior + sesión obligatoria).
 include(__DIR__ . '/../_layouts/layout.php');
-$me = current_user();
+$me = current_user();   // usuario logueado: se usa para mostrar Editar/Eliminar solo en sus posts
 ?>
 
+<!-- ===== ENCABEZADO: título de la página y botón para crear un post ===== -->
 <header class="row page-head">
   <div class="col">
     <h1>Listado de posts</h1>
@@ -13,6 +16,7 @@ $me = current_user();
   </div>
 </header>
 
+<!-- ===== LISTA: cada post es una tarjeta de vidrio oscuro (.card, ver styles.css) ===== -->
 <main>
   <?php if (!empty($posts)): ?>
     <?php foreach ($posts as $post): ?>
@@ -25,6 +29,7 @@ $me = current_user();
 
           <p class="card-text"><strong>By:</strong> <?= e($post['user_name']) ?></p>
 
+          <!-- Acciones del dueño del post: editar y eliminar (el borrado pide confirmación y usa token CSRF) -->
           <?php if ($me && $me['id'] === $post['user_id']): ?>
             <div class="d-flex align-items-center gap-3">
               <a class="btn btn-secondary" href="/src/controllers/posts/form.php?id=<?= e($post['id']) ?>">Editar</a>
@@ -39,6 +44,7 @@ $me = current_user();
       </article>
     <?php endforeach; ?>
   <?php else: ?>
+    <!-- Estado vacío -->
     <p>No hay posts todavía.</p>
   <?php endif; ?>
 </main>

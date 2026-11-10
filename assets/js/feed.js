@@ -15,6 +15,11 @@
 //            POST ?resource=saves     {post_id, saved}   -> { data: {post_id, saved} }   (saved: true | false)
 //            POST ?resource=likes     {post_id, liked}   -> { data: {post_id, liked, likes_count} }   (liked: true | false)
 //            Los POST llevan la cabecera X-CSRF-Token (de <meta name="csrf-token">, que solo existe con sesión).
+// SECCIONES NUEVAS (parte 2):
+//   - "Panel lateral"  : 📱 tablet y 🖥️ escritorio (≥ 768px). Columna derecha (#postPanel) con los detalles y los comentarios
+//                        de la publicación visible. Usa la MISMA API de comentarios de siempre (no hay lógica nueva).
+//   - "Flechas ^ y v"  : 🖥️ escritorio y 📱 tablet. Botones #feedPrev / #feedNext que suben/bajan una publicación.
+//   - 📱 celular (< 768px): el panel y las flechas están ocultos por CSS; los comentarios siguen en el modal.
 // Todo lo que viene del servidor se escribe con textContent / atributos (nunca innerHTML): no hay XSS.
 (function () {
   'use strict';
@@ -178,7 +183,11 @@
     return media;
   }
 
+  // Publicaciones ya normalizadas, por id: el panel lateral las lee desde acá (ver "Panel lateral").
+  var postData = {};
+
   function buildPost(p, isFirst) {
+    postData[p.id] = p;
     var section = el('section', 'post');
     section.dataset.postId = p.id;
     section.dataset.seller = p.seller;
@@ -252,7 +261,8 @@
       link.rel = 'noopener noreferrer';
       link.setAttribute('aria-label', 'Contactar por WhatsApp: ' + (p.title || p.desc));
       link.appendChild(icon('i-wsp'));
-      link.appendChild(el('span', 'action-label', 'WhatsApp'));
+      // Texto visible del botón (el aria-label de arriba sigue siendo descriptivo para lectores de pantalla)
+      link.appendChild(el('span', 'action-label', 'Chatea con el vendedor'));
       actions.appendChild(link);
     }
     section.appendChild(actions);
@@ -465,14 +475,19 @@
     commentErrors.classList.add('d-none');
   }
 
-  function appendComment(c) {
+  // Arma un <li> de comentario (autor + fecha + texto). Lo usan el modal (celular) y el panel lateral (tablet/escritorio).
+  function buildComment(c) {
     var item = el('li', 'comment-item');
     var head = el('div', 'comment-head');
     head.appendChild(el('span', 'comment-author', String(c.user_name || '')));
     head.appendChild(el('span', 'comment-date', formatDateTime(c.created_at)));
     item.appendChild(head);
-    item.appendChild(el('p', 'comment-body', String(c.content || '')));
-    commentsList.appendChild(item);
+    item.appendChild(el('p', 'comment-body', String(c.content || '')));   // texto, nunca HTML
+    return item;
+  }
+
+  function appendComment(c) {
+    commentsList.appendChild(buildComment(c));
   }
 
   function scrollCommentsToEnd() {
@@ -549,6 +564,163 @@
     });
   }
 
+  // ---------- Panel lateral: detalles + comentarios (📱 tablet y 🖥️ escritorio, ≥ 768px) ----------
+  // Qué hace: cuando cambia la publicación visible, muestra en la columna derecha (#postPanel) el vendedor, la fecha,
+  // el título, la descripción, el precio, la talla, el botón "Chatea con el vendedor" y sus comentarios.
+  // Qué NO hace: no agrega likes, seguir ni respuestas a comentarios. Lee y publica comentarios con la API existente.
+  // En 📱 celular el panel está oculto por CSS, así que no se piden comentarios (se usa el modal de siempre).
+  var panel = document.getElementById('postPanel');
+  var PANEL_MQ = window.matchMedia('(min-width: 768px)');   // mismo corte que landing.css (tablet y escritorio)
+  var panelEls = panel ? {
+    seller: document.getElementById('panelSeller'),
+    date: document.getElementById('panelDate'),
+    title: document.getElementById('panelTitle'),
+    desc: document.getElementById('panelDesc'),
+    price: document.getElementById('panelPrice'),
+    size: document.getElementById('panelSize'),
+    chat: document.getElementById('panelChat'),
+    count: document.getElementById('panelCount'),
+    status: document.getElementById('panelStatus'),
+    list: document.getElementById('panelComments'),
+    form: document.getElementById('panelCommentForm'),        // null para invitados (en su lugar está #panelLogin)
+    input: document.getElementById('panelCommentInput'),
+    errors: document.getElementById('panelCommentErrors'),
+    submit: document.getElementById('panelCommentSubmit'),
+    login: document.getElementById('panelLogin')               // botón "Iniciar sesión para comentar" (solo invitados)
+  } : null;
+
+  var panelPostId = null;       // publicación que se está mostrando en el panel
+  var panelRequestId = 0;       // descarta respuestas viejas cuando se cambia rápido de publicación
+  var panelTimer = null;        // pequeña espera para no pedir comentarios mientras se hace scroll rápido
+  var panelSending = false;     // evita enviar dos veces el mismo comentario
+  var currentPost = null;       // última publicación visible (para rearmar el panel al cambiar de tamaño de pantalla)
+
+  // Muestra u oculta un texto opcional (precio / talla) del panel
+  function setOptional(node, text) {
+    node.textContent = text || '';
+    node.hidden = !text;
+  }
+
+  function setPanelStatus(text) { panelEls.status.textContent = text; }
+
+  function setPanelCount(n) { panelEls.count.textContent = n === null ? '' : '(' + n + ')'; }
+
+  function showPanelErrors(list) {
+    if (!panelEls.errors) { return; }
+    panelEls.errors.textContent = '';
+    var ul = el('ul', 'mb-0 ps-3');
+    list.forEach(function (msg) { ul.appendChild(el('li', null, msg)); });   // texto, nunca HTML
+    panelEls.errors.appendChild(ul);
+    panelEls.errors.classList.remove('d-none');
+  }
+
+  function clearPanelErrors() {
+    if (!panelEls.errors) { return; }
+    panelEls.errors.textContent = '';
+    panelEls.errors.classList.add('d-none');
+  }
+
+  // Detalles de la publicación (todo con textContent)
+  function fillPanelDetails(p) {
+    panelEls.seller.textContent = p.seller || 'Pilchak';
+    panelEls.date.textContent = p.date || '';
+    panelEls.title.textContent = p.title || p.desc;                  // las de demostración no tienen título: se usa la descripción
+    panelEls.desc.textContent = p.title ? p.desc : '';               // sin título, la descripción ya está arriba
+    setOptional(panelEls.price, p.price);
+    setOptional(panelEls.size, p.size ? 'Talla: ' + p.size : '');
+    var wsp = whatsappUrl(p);                                        // mismo link que el botón verde de la publicación
+    if (wsp) { panelEls.chat.href = wsp; } else { panelEls.chat.removeAttribute('href'); }
+    panelEls.chat.hidden = !wsp;
+  }
+
+  function loadPanelComments(id) {
+    var requestId = ++panelRequestId;
+    interactionsRequest('comments', 'GET', '&post_id=' + encodeURIComponent(id))
+      .then(function (json) {
+        if (requestId !== panelRequestId) { return; }                // llegó tarde: ya se está mostrando otra publicación
+        panelEls.list.textContent = '';
+        json.data.forEach(function (c) { panelEls.list.appendChild(buildComment(c)); });
+        setPanelCount(json.data.length);
+        setPanelStatus(json.data.length ? '' : 'Todavía no hay comentarios. ¡Sé el primero!');
+      })
+      .catch(function () {
+        if (requestId === panelRequestId) { setPanelStatus('No pudimos cargar los comentarios.'); }
+      });
+  }
+
+  // Punto de entrada: lo llama el observer cada vez que una publicación pasa a ser la visible.
+  function showPanel(post) {
+    currentPost = post;
+    if (!panel || !PANEL_MQ.matches) { return; }                     // 📱 celular: el panel no se ve, no se pide nada
+    var p = postData[post.dataset.postId];
+    if (!p || panelPostId === p.id) { return; }
+
+    panelPostId = p.id;
+    clearTimeout(panelTimer);
+    panelRequestId++;                                                // cualquier pedido anterior queda descartado
+    if (panelEls.form && panelEls.input) { panelEls.input.value = ''; }   // el borrador no pasa de una publicación a otra
+    clearPanelErrors();
+    fillPanelDetails(p);
+    panelEls.list.textContent = '';
+    setPanelCount(null);
+
+    if (p.demo) {                                                    // las de demostración no existen en la base de datos
+      setPanelStatus('Las publicaciones de demostración no tienen comentarios.');
+      return;
+    }
+    setPanelStatus('Cargando comentarios...');
+    panelTimer = setTimeout(function () { loadPanelComments(p.id); }, 180);
+  }
+
+  function submitPanelComment(ev) {
+    ev.preventDefault();
+    if (panelSending || !panelPostId) { return; }
+
+    var text = panelEls.input.value.trim();
+    if (!text) { showPanelErrors(['Escribí un comentario antes de enviar.']); return; }
+    if (text.length > COMMENT_MAX) { showPanelErrors(['El comentario no puede superar ' + COMMENT_MAX + ' caracteres.']); return; }
+
+    var postId = panelPostId;
+    panelSending = true;
+    panelEls.submit.disabled = true;
+    clearPanelErrors();
+
+    interactionsRequest('comments', 'POST', '', { post_id: postId, content: text })
+      .then(function (json) {
+        if (postId !== panelPostId) { notify('Comentario publicado'); return; }   // mientras tanto se cambió de publicación
+        panelEls.list.appendChild(buildComment(json.data));
+        panelEls.list.scrollTop = panelEls.list.scrollHeight;                       // baja hasta el comentario nuevo
+        setPanelStatus('');
+        setPanelCount(panelEls.list.children.length);
+        panelEls.input.value = '';
+      })
+      .catch(function (err) {
+        if (postId === panelPostId) { showPanelErrors(errorMessages(err)); } else { notify(errorMessages(err)[0]); }
+      })
+      .then(function () { panelSending = false; panelEls.submit.disabled = false; });
+  }
+
+  // Botón "Comentar" de la publicación: con panel visible lleva el foco al panel; en celular abre el modal
+  function focusPanelComments() {
+    var target = panelEls.input || panelEls.login;
+    if (target) { target.focus(); }
+  }
+
+  if (panel) {
+    if (panelEls.form) {
+      panelEls.form.addEventListener('submit', submitPanelComment);
+      panelEls.input.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); panelEls.submit.click(); }
+      });
+    }
+    // Si la pantalla cambia de tamaño (p. ej. rotar una tablet) y el panel aparece, se rearma con la publicación visible
+    var onPanelMq = function () {
+      panelPostId = null;
+      if (currentPost) { showPanel(currentPost); }
+    };
+    if (PANEL_MQ.addEventListener) { PANEL_MQ.addEventListener('change', onPanelMq); } else { PANEL_MQ.addListener(onPanelMq); }
+  }
+
   // ---------- Autoplay/pausa de videos ----------
   // Un único observer para TODAS las publicaciones, también las agregadas después por JavaScript:
   // cada publicación nueva se registra con observer.observe() en finish().
@@ -563,6 +735,7 @@
       if (entry.isIntersecting) {
         activeVideo = video;
         if (video && !splashActive()) { video.play().catch(noop); }
+        showPanel(post);   // actualiza la columna de detalles/comentarios (tablet y escritorio)
         // landing.js escucha esto para decidir cuándo mostrar el popup
         feed.dispatchEvent(new CustomEvent('pilchak:post-visible', {
           detail: { post: post, isFirst: post === feed.querySelector('.post') }
@@ -664,7 +837,8 @@
     if (btn.dataset.action === 'like') {
       setLike(post, likedPosts[post.dataset.postId] !== true);
     } else if (btn.dataset.action === 'comment') {
-      openComments(post);
+      // 📱 tablet / 🖥️ escritorio: los comentarios ya están a la vista en el panel; 📱 celular: modal
+      if (panel && PANEL_MQ.matches) { showPanel(post); focusPanelComments(); } else { openComments(post); }
     } else if (btn.dataset.action === 'save') {
       toggleSave(post);
     } else if (btn.dataset.action === 'profile') {
@@ -691,11 +865,46 @@
     if (!step) { return; }
 
     ev.preventDefault();
+    stepFeed(step);
+  });
+
+  // ---------- Flechas ^ y v (🖥️ escritorio y 📱 tablet) ----------
+  // Botones #feedPrev (data-feed-step="-1") y #feedNext (data-feed-step="1") de landing.php. Cada clic sube o baja UNA
+  // publicación con scroll suave. No guardan estado: la publicación actual se calcula con el scroll del feed (cada
+  // .post mide lo mismo que #feed, ver landing.css). En 📱 celular están ocultas por CSS (se desliza con el dedo).
+  // El teclado (flechas / RePág / AvPág) usa esta misma función.
+  var arrowBtns = document.querySelectorAll('[data-feed-step]');
+
+  function stepFeed(step) {
     var count = feed.querySelectorAll('.post').length;
+    if (!count || !feed.clientHeight) { return; }
     var current = Math.round(feed.scrollTop / feed.clientHeight);
     var target = Math.max(0, Math.min(count - 1, current + step));
     feed.scrollTo({ top: target * feed.clientHeight, behavior: 'smooth' });
-  });
+  }
+
+  // Deshabilita "^" en la primera publicación y "v" en la última (o si no hay publicaciones)
+  function updateArrows() {
+    var count = feed.querySelectorAll('.post').length;
+    var current = feed.clientHeight ? Math.round(feed.scrollTop / feed.clientHeight) : 0;
+    arrowBtns.forEach(function (btn) {
+      btn.disabled = btn.dataset.feedStep === '-1' ? current <= 0 : current >= count - 1;
+    });
+  }
+
+  if (arrowBtns.length) {
+    arrowBtns.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        stepFeed(parseInt(btn.dataset.feedStep, 10) || 0);
+        feed.focus({ preventScroll: true });   // el foco queda en el feed para seguir con el teclado
+      });
+    });
+    feed.addEventListener('scroll', updateArrows, { passive: true });
+    window.addEventListener('resize', updateArrows);
+    // Las publicaciones se agregan después de cargar la API: el estado se recalcula cuando cambia el contenido
+    new MutationObserver(updateArrows).observe(feed, { childList: true });
+    updateArrows();
+  }
 
   loadSaved();
   load();

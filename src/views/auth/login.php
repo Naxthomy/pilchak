@@ -1,6 +1,9 @@
 <?php
+// VISTA DE LOGIN. Usa el layout de autenticación (fondo oscuro + tarjeta de vidrio, ver .auth-card en styles.css).
+// El formulario envía a src/controllers/auth/login.php; esta vista solo muestra errores y el enlace al registro.
 include(__DIR__ . '/../_layouts/auth.layout.php');
 
+// Mensajes de error según el código que manda el controlador (?error=...)
 $errors = [
   'empty'   => 'Completá tu e-mail y tu contraseña.',
   'invalid' => 'E-mail o contraseña incorrectos.',
@@ -11,8 +14,10 @@ $error = $errors[$_GET['error'] ?? ''] ?? null;
 $next  = auth_next_from($_GET);   // 'publish' si venía del botón "+"
 ?>
 
+<!-- ===== VOLVER AL FEED ===== -->
 <a class="auth-back" href="/">&larr; Volver</a>
 
+<!-- ===== CABECERA: logo, nombre y lema ===== -->
 <div class="text-center mb-4">
   <!-- ============================================================
        LOGO DE PILCHAK (LOGIN)
@@ -26,10 +31,12 @@ $next  = auth_next_from($_GET);   // 'publish' si venía del botón "+"
   <p class="auth-subtitle small">Encontrá tu pilcha ideal!</p>
 </div>
 
+<!-- ===== ERROR (si lo hay) ===== -->
 <?php if ($error): ?>
   <div class="alert alert-danger py-2 small" role="alert"><?= e($error) ?></div>
 <?php endif; ?>
 
+<!-- ===== FORMULARIO: e-mail + contraseña (POST con token CSRF; "next" conserva a dónde volver tras ingresar) ===== -->
 <form action="/src/controllers/auth/login.php" method="POST">
   <?= csrf_field() ?>
   <?php if ($next !== ''): ?><input type="hidden" name="next" value="<?= e($next) ?>"><?php endif; ?>
@@ -46,6 +53,7 @@ $next  = auth_next_from($_GET);   // 'publish' si venía del botón "+"
   <button type="submit" class="btn btn-primary w-100">Ingresar</button>
 </form>
 
+<!-- ===== SEPARADOR "o" + acceso con Google (deshabilitado por ahora) ===== -->
 <div class="divider my-3">
   <span>o</span>
 </div>
@@ -60,6 +68,7 @@ $next  = auth_next_from($_GET);   // 'publish' si venía del botón "+"
   Continuar con Google (próximamente)
 </button>
 
+<!-- ===== PIE: enlace al registro (mantiene "next") ===== -->
 <div class="text-center">
   <p class="auth-footer-text small">¿No tienes una cuenta? <a href="<?= e(with_next('/src/views/auth/register.php', $next)) ?>">¡Registrate ahora!</a></p>
 </div>

@@ -3,8 +3,13 @@
    Misma línea que el feed: fondo oscuro con destellos, tarjeta glass,
    bordes finos, esquinas redondeadas y neones apagados.
    Archivo autocontenido (esta vista no carga styles.css).
+
+   DISPOSITIVOS (cada bloque lo indica):
+   - 🖥️ ESCRITORIO y 📱 TABLET (≥ 561px): tarjeta flotante centrada; la barra inferior queda pegada a su borde.
+                                         En tablet (≥ 768px) la tarjeta es un poco más ancha.
+   - 📱 CELULAR (≤ 560px)             : la tarjeta ocupa toda la pantalla y la barra inferior va de borde a borde.
    ===================================================================== */
-:root {
+   :root {
     --bg: #05070d;
     --text: #e8edf8;
     --muted: #8d99b0;
@@ -65,6 +70,11 @@ body::before {
         0 0 0 6px rgba(14, 19, 31, .55),
         0 30px 80px rgba(0, 0, 0, .6),
         0 0 60px rgba(90, 120, 220, .08);
+    /* En escritorio la tarjeta ocupa el alto de la ventana: así la barra inferior (fija) queda pegada a su borde.
+       El padding-bottom reserva el lugar de la barra para que no tape la última fila de publicaciones. */
+    min-height: calc(100vh - 48px);
+    min-height: calc(100dvh - 48px);
+    padding-bottom: 96px;
 }
 
 /* Cabecera */
@@ -72,7 +82,7 @@ body::before {
 
 .profile__cover {
     position: relative;
-    height: 150px;
+    height: clamp(120px, 32vw, 170px);
     background: linear-gradient(135deg, var(--cover), #2a2058) center / cover no-repeat;
 }
 /* Degradado inferior para fundir la portada con la tarjeta */
@@ -216,8 +226,9 @@ body::before {
 
 /* ---- Integración con Pilchak ---- */
 
-/* Barra mínima: volver al feed / cerrar sesión */
-.profile__bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px; }
+/* Barra superior: marca + cerrar sesión */
+.profile__bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 16px; }
+.profile__brand { font-weight: 700; letter-spacing: .3em; font-size: .95rem; color: var(--text); user-select: none; }
 .profile__bar form { margin: 0; }
 .profile__bar .btn { display: inline-block; }
 
@@ -232,8 +243,98 @@ body::before {
 .tile--media .tile__title,
 .tile--media .tile__text { position: relative; z-index: 1; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, .8); }
 
+/* ---- Barra de navegación inferior (fija): Inicio · Crear (+) · Perfil ----
+   En escritorio mide lo mismo que la tarjeta y queda pegada a su borde inferior; en celulares ocupa todo el ancho. */
+.bottom-nav {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    z-index: 20;
+    width: min(100%, 520px);
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 10px 8px calc(10px + env(safe-area-inset-bottom, 0px));
+    background: rgba(5, 8, 14, .88);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    border: 1px solid rgba(205, 215, 235, .22);
+    border-top-color: var(--line);
+    border-radius: 0 0 30px 30px;
+}
+
+.bottom-nav__item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    border: 1px solid transparent;
+    border-radius: 50%;
+    color: rgba(255, 255, 255, .68);
+    text-decoration: none;
+    transition: color .2s ease, background-color .2s ease, border-color .2s ease;
+}
+.bottom-nav__item:hover { color: #fff; }
+.bottom-nav__item:focus-visible { outline: 2px solid rgba(154, 167, 255, .8); outline-offset: 2px; }
+
+.bottom-nav__icon {
+    display: block;
+    width: 26px;
+    height: 26px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* Botón central "+": rectángulo claro (igual que el del feed) */
+.bottom-nav__item--publish {
+    width: auto;
+    height: auto;
+    padding: 4px 18px;
+    border-radius: 10px;
+    background: #f4f6fb;
+    color: #05070d;
+    box-shadow: 0 0 18px rgba(200, 215, 255, .14);
+}
+.bottom-nav__item--publish:hover { color: #000; background: #fff; }
+.bottom-nav__item--publish .bottom-nav__icon { stroke-width: 2.5; }
+
+/* ESTADO ACTIVO (sección actual): círculo más oscuro con borde fino + barrita de acento debajo */
+.bottom-nav__item.is-active {
+    color: #fff;
+    background: #02040a;
+    border-color: rgba(205, 215, 235, .22);
+    box-shadow: inset 0 0 12px rgba(0, 0, 0, .7);
+}
+.bottom-nav__item.is-active::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -5px;
+    width: 18px;
+    height: 3px;
+    transform: translateX(-50%);
+    border-radius: 3px;
+    background: #9aa7ff;
+    box-shadow: 0 0 8px rgba(154, 167, 255, .55);
+}
+
 /* ---- Responsive ---- */
-/* Celulares: la tarjeta ocupa toda la pantalla, igual que el feed */
+
+/* 📱 TABLET (≥ 768px): tarjeta y barra inferior más anchas (mismo ancho entre sí para que se vean como una sola pieza) */
+@media (min-width: 768px) {
+    .profile { max-width: 620px; }              /* tarjeta del perfil */
+    .bottom-nav { width: min(100%, 620px); }    /* barra inferior: siempre igual de ancha que la tarjeta */
+    .grid { gap: 6px; padding: 6px; }           /* más aire entre miniaturas */
+    .profile__cover { height: 190px; }          /* portada algo más alta */
+}
+
+/* 📱 CELULAR (≤ 560px): la tarjeta ocupa toda la pantalla, igual que el feed */
 @media (max-width: 560px) {
     .profile {
         max-width: none;
@@ -243,9 +344,11 @@ body::before {
         border: 0;
         border-radius: 0;
         box-shadow: none;
-        padding-bottom: env(safe-area-inset-bottom, 0px);
+        padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));   /* lugar para la barra inferior */
     }
     .profile__bar { padding-top: calc(12px + env(safe-area-inset-top, 0px)); }
+    /* La barra inferior ocupa todo el ancho, pegada al borde de la pantalla */
+    .bottom-nav { bottom: 0; width: 100%; border-width: 1px 0 0; border-radius: 0; }
 }
 
 /* Pantallas muy angostas */

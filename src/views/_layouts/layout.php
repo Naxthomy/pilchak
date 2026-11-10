@@ -1,7 +1,9 @@
 <?php
+// LAYOUT PRIVADO: cabecera común de las páginas que requieren sesión (listado de posts, formularios, etc.).
+// Abre <html>, <head>, la barra superior y <main>; la vista que lo incluye continúa el contenido.
 require_once __DIR__ . '/../../config/session.php'; # Sesión + helpers (sin DB)
 
-# Si no estoy logueado, me saca
+# Si no estoy logueado, me saca (redirige al login)
 require_login();
 ?>
 
@@ -9,14 +11,17 @@ require_login();
 <html lang="es">
 <head>
   <meta charset="UTF-8">
+  <!-- Responsive: ancho del dispositivo + viewport-fit=cover para celulares con notch -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#05070d">
+  <!-- Estilos: Bootstrap 5 + estilos de Pilchak (tema oscuro/glassmorphism en styles.css) -->
   <link rel="stylesheet" href="/assets/css/bootstrap.min.css">
   <link rel="stylesheet" href="/assets/css/styles.css">
   <script src="/assets/js/bootstrap.min.js"></script>
   <title>Pilchak</title>
 </head>
 <body>
+  <!-- ===== BARRA SUPERIOR (vidrio oscuro, ver .app-navbar en styles.css) ===== -->
   <nav class="navbar app-navbar">
     <div class="container-fluid">
       <div class="d-flex align-items-center gap-2">
@@ -27,6 +32,7 @@ require_login();
         <!-- Marca: solo texto (no es un enlace ni un botón). Siempre visible: ver .navbar-wordmark en styles.css -->
         <span class="navbar-wordmark">PILCHAK</span>
       </div>
+      <!-- Cierre de sesión: POST con token CSRF -->
       <form method="POST" action="/src/controllers/auth/logout.php" class="m-0">
         <?= csrf_field() ?>
         <button type="submit" class="btn text-danger">Logout</button>
@@ -34,5 +40,6 @@ require_login();
     </div>
   </nav>
 
+  <!-- ===== CONTENIDO: la vista que incluye este layout sigue desde acá ===== -->
   <main class="container mt-3">
     <!-- Acá se cargan los sitios, pueden modificar lo que gusten -->
