@@ -115,32 +115,32 @@ $demoJson = json_encode($demoPosts, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS 
   <?php endif; ?>
 
   <!-- ===== ESTRUCTURA GENERAL (3 columnas; cambia según el dispositivo, ver landing.css) =====
-       [.side-left: tarjetas]  [.stage: feed + flechas]  [.side-right: detalles + comentarios del post]
-       - Escritorio (≥ 1200px): las 3 columnas.
+       [.side-left: tarjetas]  [.stage: feed + columna de acciones/flechas]  [.side-right: detalles + comentarios]
+       - Escritorio (≥ 1200px): las 3 columnas. El feed (.phone) queda CENTRADO en la pantalla.
        - Tablet (768–1199px): se oculta la columna izquierda; quedan el feed y la columna de detalles/comentarios.
-       - Celular (< 768px): se ocultan las dos columnas laterales y el feed ocupa toda la pantalla. -->
+       - Celular (< 768px): se ocultan las columnas laterales y el feed ocupa toda la pantalla. -->
   <div class="app-shell">
-  <!-- .stage = columna central: contiene el feed flotante (.phone) y las flechas ^ v -->
+  <!-- .stage = columna central: el feed flotante (.phone) y, a su derecha, la columna de acciones y flechas (.stage-rail) -->
   <div class="stage">
   <div class="phone">
 
   <!-- ===== BARRA SUPERIOR =====
        - Lupa (siempre).
-       - Invitados: "Registrate o iniciá sesión" (y, solo en celulares < 768px, el acceso a donar con Cafecito).
-       - Con sesión: solo la lupa. El perfil y el "+" viven en la barra inferior (no se duplican acá),
-         y el antiguo botón "Mi cuenta" se eliminó porque no se adaptaba bien entre dispositivos. -->
+       - Cafecito ("Colaborar"): SIEMPRE visible en celular y tablet (< 1200px), con o sin sesión.
+         En escritorio se oculta por CSS porque ya existe la tarjeta "Colaborar con el proyecto" a la izquierda.
+       - Invitados: además, el botón "Registrate o iniciá sesión". Con sesión iniciada ese botón no existe,
+         así que la barra queda solo con la lupa y Cafecito.
+       - El perfil y el "+" viven en la barra inferior (no se duplican acá). -->
   <nav class="feed-nav feed-nav-top" aria-label="Navegación principal">
     <button type="button" class="feed-nav-btn" data-nav="search" data-label="Búsqueda" aria-label="Buscar">
       <svg class="feed-icon" aria-hidden="true"><use href="#i-search"/></svg>
     </button>
+    <!-- Cafecito: está FUERA del bloque de invitados a propósito (antes desaparecía al iniciar sesión) -->
+    <a class="feed-donate-mini" href="<?= e($donateUrl) ?>" target="_blank" rel="noopener noreferrer" aria-label="Invitarnos un cafecito (colaborar con el proyecto)" title="Colaborar con el proyecto">
+      <svg class="donate-logo" aria-hidden="true"><use href="#i-cafecito"/></svg><span>Colaborar</span>
+    </a>
     <?php if (!$isAuth): ?>
-      <!-- Invitado (SOLO celulares < 768px): "Colaborar" (Cafecito) ocupa el lugar del bloque de registro, junto al botón de acceso.
-           En tablet y escritorio este acceso se oculta (CSS) porque ya no se muestran las tarjetas laterales o existe
-           la tarjeta "Colaborar con el proyecto". -->
-      <a class="feed-donate-mini" href="<?= e($donateUrl) ?>" target="_blank" rel="noopener noreferrer" aria-label="Invitarnos un cafecito (colaborar con el proyecto)" title="Colaborar con el proyecto">
-        <svg class="donate-logo" aria-hidden="true"><use href="#i-cafecito"/></svg><span>Colaborar</span>
-      </a>
-      <!-- Link normal al flujo de autenticación existente (funciona sin JS) -->
+      <!-- Solo invitados. Link normal al flujo de autenticación existente (funciona sin JS) -->
       <a class="btn btn-feed-login" href="/src/views/auth/login.php" data-auth-link>Registrate o iniciá sesión</a>
     <?php endif; ?>
   </nav>
@@ -188,19 +188,45 @@ $demoJson = json_encode($demoPosts, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS 
 
   </div><!-- /.phone -->
 
-  <!-- ===== FLECHAS DE NAVEGACIÓN VERTICAL (escritorio y tablet) =====
-       Suben/bajan una publicación por vez. El comportamiento está en assets/js/feed.js (sección "Flechas ^ y v"):
-         #feedPrev  [data-feed-step="-1"]  → publicación anterior (^)
-         #feedNext  [data-feed-step="1"]   → publicación siguiente (v)
-       Se deshabilitan solas en la primera/última publicación. En celulares se ocultan (se desliza con el dedo). -->
-  <div class="feed-arrows" role="group" aria-label="Navegar entre publicaciones">
-    <button type="button" class="feed-arrow feed-arrow-up" id="feedPrev" data-feed-step="-1" aria-label="Publicación anterior" title="Anterior" disabled>
-      <svg class="feed-icon" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>
-    </button>
-    <button type="button" class="feed-arrow feed-arrow-down" id="feedNext" data-feed-step="1" aria-label="Publicación siguiente" title="Siguiente" disabled>
-      <svg class="feed-icon" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
-    </button>
-  </div>
+  <!-- ===== COLUMNA DE ACCIONES + FLECHAS (escritorio y tablet) =====
+       Vive AFUERA del celular, a su derecha, para que la foto/video ocupe todo el marco y el marco quede centrado.
+       En celular (< 768px) esta columna se oculta (CSS): ahí los botones van dentro de cada publicación.
+       - #railActions: perfil, me gusta, comentar, guardar y WhatsApp DE LA PUBLICACIÓN VISIBLE.
+         Son botones únicos: assets/js/feed.js (sección "Columna de acciones") los sincroniza al cambiar de publicación.
+       - .feed-arrows: suben/bajan una publicación (sección "Flechas ^ y v" de feed.js). -->
+  <div class="stage-rail">
+    <div class="rail-actions" id="railActions" role="group" aria-label="Acciones de la publicación">
+      <button type="button" class="post-avatar" data-action="profile" aria-label="Ver perfil del vendedor">
+        <svg class="feed-icon" aria-hidden="true"><use href="#i-user"/></svg>
+      </button>
+      <button type="button" class="action-btn action-like" data-action="like" aria-pressed="false" aria-label="Me gusta">
+        <svg class="feed-icon" aria-hidden="true"><use href="#i-heart"/></svg><span class="action-label">0</span>
+      </button>
+      <button type="button" class="action-btn action-comment" data-action="comment" aria-label="Comentarios">
+        <svg class="feed-icon" aria-hidden="true"><use href="#i-comment"/></svg><span class="action-label">Comentar</span>
+      </button>
+      <button type="button" class="action-btn action-save" data-action="save" aria-pressed="false" aria-label="Guardar publicación">
+        <svg class="feed-icon" aria-hidden="true"><use href="#i-bookmark"/></svg><span class="action-label">Guardar</span>
+      </button>
+      <!-- WhatsApp: feed.js le pone el link de la publicación visible; sin número válido queda oculto -->
+      <a class="action-btn action-wsp" target="_blank" rel="noopener noreferrer" hidden>
+        <svg class="feed-icon" aria-hidden="true"><use href="#i-wsp"/></svg><span class="action-label">Chatea con el vendedor</span>
+      </a>
+    </div>
+
+    <!-- FLECHAS DE NAVEGACIÓN VERTICAL: suben/bajan una publicación por vez (ver feed.js, "Flechas ^ y v"):
+           #feedPrev  [data-feed-step="-1"]  → publicación anterior (^)
+           #feedNext  [data-feed-step="1"]   → publicación siguiente (v)
+         Se deshabilitan solas en la primera/última publicación. -->
+    <div class="feed-arrows" role="group" aria-label="Navegar entre publicaciones">
+      <button type="button" class="feed-arrow feed-arrow-up" id="feedPrev" data-feed-step="-1" aria-label="Publicación anterior" title="Anterior" disabled>
+        <svg class="feed-icon" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>
+      </button>
+      <button type="button" class="feed-arrow feed-arrow-down" id="feedNext" data-feed-step="1" aria-label="Publicación siguiente" title="Siguiente" disabled>
+        <svg class="feed-icon" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+    </div>
+  </div><!-- /.stage-rail -->
   </div><!-- /.stage -->
 
   <!-- ===== COLUMNA IZQUIERDA (solo escritorio ≥ 1200px): identidad, información, colaborar y redes ===== -->

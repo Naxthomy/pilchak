@@ -301,7 +301,7 @@ Errores: `400` (resource inválido o JSON roto), `401`, `403`, `404` (la publica
 ## 6. Interfaz
 
 - **Feed** (`src/views/landing.php` + `assets/js/feed.js`): pide las publicaciones a la API y las dibuja con el DOM (`textContent`, nunca `innerHTML`, así no hay XSS). Las publicaciones con imagen o video se muestran a pantalla completa (autoplay y pausa de videos); las de solo texto, como tarjeta. Solo se aceptan `media_url` con el formato exacto que genera el servidor y cuyo tipo coincida con la extensión.
-- **Acciones de cada publicación** (columna derecha, de arriba abajo): perfil, **Me gusta**, **Comentar**, **Guardar** y WhatsApp.
+- **Acciones de cada publicación** (de arriba abajo): perfil, **Me gusta**, **Comentar**, **Guardar** y WhatsApp. En **celular** van encima de la foto, a la derecha de cada publicación; en **tablet y escritorio** hay una sola columna (`#railActions`) a la derecha del celular simulado, junto a las flechas ^ y v, que muestra las acciones de la publicación visible (ver §10).
 - **Formulario de publicar** (`#publishForm`): además del título y la descripción, **Precio** y **Talla o número** son obligatorios (el formulario los valida y la API vuelve a validarlos). La tarjeta del feed los muestra como «Precio: $15.000» y «Talla: M»; las publicaciones viejas sin esos datos se ven igual, sin esa línea.
 - **Perfil** (`src/views/profile/index.php`): el contador «Me gusta» suma los me gusta recibidos en todas tus publicaciones (se cuentan en `post_likes`; 0 si falta la migración 006).
 - **Botón «Me gusta»** (`data-action="like"`, también el doble toque sobre la publicación): con sesión, el corazón y el número cambian al instante, se guarda en la tabla `post_likes` y se muestra el total que devuelve el servidor (suma de todos los usuarios; desde 1000 se abrevia, «1,2 mil»). Volver a tocarlo quita el me gusta y el total baja. Una misma persona no puede sumar dos veces (clave primaria `user_id` + `post_id`). Si el servidor falla, todo vuelve atrás y se avisa; un invitado recibe «Iniciá sesión para dar me gusta».
@@ -314,8 +314,8 @@ Errores: `400` (resource inválido o JSON roto), `401`, `403`, `404` (la publica
 ### Flujo de la aplicación
 
 1. `index.php` solo carga la sesión (sin base de datos) y muestra el feed. El feed es público. **No hay redirecciones** desde `index.php`.
-2. **Invitado:** overlay de carga con el logo, barra superior (lupa + «Registrate o iniciá sesión») y barra inferior (casita, «+», perfil).
-3. **Con sesión:** sin overlay ni popup; el botón superior pasa a «Mi cuenta» (home privado `src/views/index.php`, con Logout) y «+» abre el formulario de publicar.
+2. **Invitado:** overlay de carga con el logo, barra superior (lupa, Cafecito —solo en celular y tablet— y «Registrate o iniciá sesión») y barra inferior (casita, «+», perfil).
+3. **Con sesión:** sin overlay ni popup; en celular y tablet la barra superior muestra **solo la lupa y Cafecito** (desaparece «Registrate o iniciá sesión»), el perfil está en la barra inferior y «+» abre el formulario de publicar.
 4. El feed muestra primero las publicaciones reales (las más nuevas arriba) y a continuación las de demostración (`$demoPosts` en `landing.php`).
 5. **«+» como invitado** → login (`login.php?next=publish`) → al autenticarse vuelve al feed (`/?publish=1`) con el formulario abierto. `next` pasa por una lista blanca (`auth_next_from()`).
 6. Un usuario con sesión que abre login/registro es enviado al feed. Las páginas privadas siguen protegidas por `layout.php`.
@@ -376,6 +376,136 @@ Como el servidor es una emulación, **no verifican el PHP real**: ni `uploads.ph
 - Un `.txt` o `.php` renombrado como `.jpg` → `422` («Formato no permitido»); un archivo que supere el tope → `422`; `POST` sin sesión → `401`; sin token CSRF → `403`.
 - Dos subidas del mismo archivo no se pisan (nombres distintos).
 - Borrar una publicación con imagen elimina el archivo del disco.
+
+## 10. Registro de cambios: ajustes de diseño (12/11/2026)
+
+Esta sección explica, en orden, **qué se pidió, por qué pasaba y cómo se resolvió**, para que cualquiera del equipo pueda entenderlo sin haber estado presente.
+
+### 10.1 Qué se pidió
+
+| # | Dispositivo | Problema |
+|---|-------------|----------|
+| 1 | 🖥️ Escritorio | En la columna izquierda (Pilchak, Información, Colaborar, Redes) se cortaba un pedacito de las tarjetas cuando eran más altas que la pantalla. |
+| 2 | 🖥️ Escritorio | El celular simulado y la publicación estaban corridos hacia la izquierda. Se quería que la foto ocupe todo el marco y que el marco quede centrado, con los botones (perfil, me gusta, comentar...) y las flechas a un costado. |
+| 3 | 📱 Celular y tablet | Al iniciar sesión desaparecían **los dos** botones de arriba («Registrate o iniciá sesión» y Cafecito). Con sesión debe verse **solo Cafecito**. En tablet también debe mostrarse como en celular. |
+
+La columna derecha del escritorio (detalles y comentarios) **no se tocó**.
+
+### 10.2 Cómo está armada la pantalla (leelo antes del código)
+
+La página es una grilla (`.app-shell`) con tres zonas. En el escritorio:
+
+```text
+┌──── .side-left ────┐  ┌────────────────── .stage ──────────────────┐  ┌── .side-right ──┐
+│ 4 tarjetas         │  │ [hueco] [   .phone   ] [ .stage-rail     ] │  │ detalles y      │
+│ (identidad, info,  │  │ (vacío) (celular con   (acciones + flechas) │  │ comentarios     │
+│  colaborar, redes) │  │          la foto)                           │  │                 │
+└────────────────────┘  └─────────────────────────────────────────────┘  └─────────────────┘
+        300px                    se ajusta al contenido                         340px
+```
+
+- **`.phone`** es el marco con forma de celular (relación 9:16). Adentro está el feed.
+- **`.stage-rail`** es la columna nueva, a la derecha del celular: arriba las flechas ^ y v, abajo los botones de la publicación que se está viendo.
+- El **hueco** de la izquierda está vacío a propósito: mide lo mismo que la columna de la derecha, así el celular queda en el medio (ver 10.4).
+
+Según el ancho de pantalla cambia la cantidad de zonas (todo está en `assets/css/landing.css`):
+
+| Dispositivo | Ancho | Qué se ve |
+|-------------|-------|-----------|
+| 🖥️ Escritorio | ≥ 1200px | Las 3 zonas |
+| 📱 Tablet | 768 a 1199px | Sin tarjetas de la izquierda: celular + columna de acciones, y detalles/comentarios |
+| 📱 Celular | < 768px | Solo el feed a pantalla completa; los botones van encima de la foto |
+
+### 10.3 Problema 1: tarjetas cortadas a la izquierda
+
+**Causa.** La columna usaba `justify-content: center` para centrar las tarjetas. Si las tarjetas son más altas que la pantalla, centrar reparte lo que sobra hacia arriba **y** hacia abajo, y la parte de arriba queda fuera del área con scroll: no se puede ver ni scrollear, solo se ve «cortada». En una pantalla de 1917×957 las tarjetas medían 929px y la columna tenía 917px.
+
+**Solución (3 partes):**
+
+1. **Centrado seguro.** En vez de `justify-content: center`, la primera tarjeta lleva `margin-top: auto` y la última `margin-bottom: auto`. Si sobra lugar, los márgenes lo reparten y las tarjetas quedan centradas. Si falta lugar, los márgenes valen 0, las tarjetas arrancan desde arriba y la columna se puede scrollear: nunca se pierde nada.
+2. **Compactar antes.** El modo «compacto» (tarjetas más chicas) arrancaba en pantallas de 900px de alto o menos; ahora arranca en 1010px. Se agregaron dos niveles más para pantallas bajas (≤ 760px y ≤ 640px).
+3. **Aire alrededor.** Se agregó `padding` a la columna para que el borde y la sombra de las tarjetas no se recorten.
+
+```css
+.side-left > :first-child { margin-top: auto; }
+.side-left > :last-child  { margin-bottom: auto; }
+```
+
+### 10.4 Problema 2: celular descentrado
+
+**Causas (había tres):**
+
+1. Las flechas ^ y v estaban *dentro* del bloque central, a la derecha del celular. Para centrar el conjunto, el celular se corría a la izquierda.
+2. Las columnas de los costados medían distinto (300px y 340px), así que el centro de la grilla no era el centro de la pantalla.
+3. Dentro del celular, cada publicación reservaba una franja de 80px a la derecha para los botones, y la foto se dibujaba corrida a la izquierda.
+
+**Solución:**
+
+1. **Los botones salen de la foto.** Se creó la columna `.stage-rail` (en `landing.php`) con perfil, me gusta, comentar, guardar y WhatsApp, más las flechas. La foto ahora ocupa **todo** el marco.
+2. **Hueco simétrico.** `.stage` pasó a ser una grilla de 3 columnas `[hueco | celular | acciones]`; el hueco y la columna de acciones miden lo mismo (`--rail-w`), así el celular queda en el medio de `.stage`.
+3. **Centro exacto en la pantalla.** `.app-shell` pasó de `300px | 1fr | 340px` a `1fr | auto | 1fr`: el centro mide lo que mide su contenido y los costados se reparten el resto **por igual**, aunque las tarjetas midan distinto.
+
+```css
+.app-shell { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+.stage     { display: grid; grid-template-columns: var(--rail-left) var(--phone-w) var(--rail-w); }
+```
+
+Medido en pantalla: el centro del celular queda a menos de 1px del centro de la ventana en 1200, 1280, 1366, 1536, 1917 y 2560px de ancho.
+
+**¿Cómo funcionan los botones si están afuera de la publicación?** Hay **una sola** columna de botones y no una por publicación. `assets/js/feed.js` (sección «Columna de acciones») hace dos cosas:
+
+- `syncRail(post)`: copia a la columna el estado de la publicación visible (corazón activo, contador, «Guardado», link de WhatsApp). Se llama cada vez que cambia la publicación visible y cada vez que `paintLike`/`paintSave` repintan.
+- Cuando se toca un botón de la columna, se ejecuta la **misma** función que usan los botones del celular: `runAction(action, post)`, pero sobre la publicación visible (`currentPost`). Esa función salió del listener de `#feed`, así que la lógica de me gusta, guardar y comentar **no se duplicó**.
+
+Los botones que ya existían dentro de cada publicación siguen estando (los usa el celular); en pantallas ≥ 768px el CSS los oculta con `.post-actions { display: none; }`.
+
+### 10.5 Problema 3: Cafecito y login en celular y tablet
+
+**Causa.** En `landing.php` el botón de Cafecito de la barra superior estaba escrito *dentro* de `<?php if (!$isAuth): ?>`, o sea que solo existía para invitados. Además, en tablet una regla CSS lo ocultaba.
+
+**Solución:**
+
+- En `landing.php` el botón de Cafecito pasó **afuera** del `if`; solo «Registrate o iniciá sesión» queda adentro. Resultado: invitado ve Cafecito + login; con sesión, solo Cafecito.
+- En `landing.css` las reglas del botón pasaron de `@media (max-width: 767.98px)` (solo celular) a `@media (max-width: 1199.98px)` (celular + tablet) y se borró la regla que lo ocultaba en tablet. En escritorio sigue oculto porque ya existe la tarjeta «Colaborar con el proyecto».
+- El texto «Colaborar» se muestra cuando el feed es ancho (celulares ≥ 420px y tablets ≥ 1000px); si no, solo la taza. En tablets chicas (768 a 999px) el botón de login se achica un poco para que entren la lupa, la taza y el login sin desbordar.
+
+### 10.6 Archivos modificados
+
+| Archivo | Qué cambió |
+|---------|-----------|
+| `src/views/landing.php` | Cafecito fuera del `if (!$isAuth)`; nuevo bloque `.stage-rail` (acciones + flechas); comentarios actualizados. |
+| `assets/css/landing.css` | Variables de medidas (`--rail-w`, `--rail-left`, `--cols-w`...); grilla de `.app-shell` y `.stage`; estilos de `.stage-rail` y `.rail-actions`; columna izquierda con centrado seguro y más niveles de compactación; reglas de Cafecito para celular + tablet; `.stage-rail` oculta en celular. |
+| `assets/js/feed.js` | Nueva función `runAction`, nueva sección «Columna de acciones» (`syncRail`, `copyButtonState`) y una llamada a `syncRail` en `paintLike`, `paintSave` y `showPanel`. |
+| `tests/ui/harness.py` | El arnés de pruebas no entendía `e($donateUrl)` ni `e($repoUrl)` (agregados en el rediseño anterior) y fallaba al renderizar `landing.php`; se sumaron esas dos expresiones. |
+| `README.md` | Esta sección y dos líneas de la sección 6. |
+
+**Qué se quitó (y por qué):**
+
+- La grilla `[foto | franja]` de `.post` en pantallas ≥ 768px y la variable `--actions-w`: ya no hace falta reservar una franja dentro de la publicación porque los botones están afuera.
+- `justify-content: center` de `.side-left`: era la causa del corte (ver 10.3).
+- La regla `.feed-donate-mini { display: none; }` del breakpoint de tablet: ocultaba Cafecito en tablet.
+- El valor fijo `--stage-pad: 104px` / `96px`: ahora el espacio se calcula con `--stage-extra`, que suma el hueco, la columna de acciones y las separaciones.
+
+No se borró ningún archivo y no hay cambios en la base de datos ni en la API.
+
+### 10.7 Cómo ajustar el diseño (variables CSS)
+
+Todas están al principio de `assets/css/landing.css`:
+
+- `--rail-w`: ancho de la columna de acciones/flechas (80px).
+- `--rail-gap`: separación entre el celular y esa columna (14px).
+- `--media-fit`: `contain` muestra la foto entera (con franjas si no es 9:16); `cover` llena todo el marco recortando los bordes.
+- `--col-left` / `--col-right`: ancho de las columnas laterales del escritorio (300px y 340px).
+
+### 10.8 Cómo probarlo
+
+1. Abrí el feed en el navegador y mové el ancho de la ventana (o usá el modo dispositivo de las herramientas de desarrollo): 1920×1080, 1366×768, 1280×720, 1024×768 (tablet), 768×1024 (tablet) y 390×844 (celular).
+2. **Escritorio:** el celular debe verse en el medio de la pantalla; las 4 tarjetas de la izquierda se ven completas; con sesión, los botones de la columna (me gusta, guardar, comentar, WhatsApp) actúan sobre la publicación visible y cambian al usar las flechas.
+3. **Celular y tablet:** invitado = Cafecito + «Registrate o iniciá sesión»; con sesión iniciada = solo Cafecito.
+
+### 10.9 Pendiente a tener en cuenta
+
+La batería `tests/ui/test_ui.py` quedó desactualizada con el rediseño visual anterior: se corta en un caso con sesión que espera el botón `.btn-feed-login`. Conviene revisarla aparte; no forma parte de este cambio.
 
 ## Notas para los alumnos
 

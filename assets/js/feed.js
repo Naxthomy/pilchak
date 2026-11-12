@@ -19,7 +19,10 @@
 //   - "Panel lateral"  : 📱 tablet y 🖥️ escritorio (≥ 768px). Columna derecha (#postPanel) con los detalles y los comentarios
 //                        de la publicación visible. Usa la MISMA API de comentarios de siempre (no hay lógica nueva).
 //   - "Flechas ^ y v"  : 🖥️ escritorio y 📱 tablet. Botones #feedPrev / #feedNext que suben/bajan una publicación.
-//   - 📱 celular (< 768px): el panel y las flechas están ocultos por CSS; los comentarios siguen en el modal.
+//   - "Columna de acciones": 🖥️ escritorio y 📱 tablet. Los botones perfil / me gusta / comentar / guardar / WhatsApp viven
+//                        en UNA columna (#railActions) a la derecha del celular y se sincronizan con la publicación visible.
+//   - 📱 celular (< 768px): el panel, la columna de acciones y las flechas están ocultos por CSS; los botones van dentro
+//                        de cada publicación y los comentarios siguen en el modal.
 // Todo lo que viene del servidor se escribe con textContent / atributos (nunca innerHTML): no hay XSS.
 (function () {
   'use strict';
@@ -345,6 +348,7 @@
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     btn.setAttribute('aria-label', on ? 'Quitar de guardados' : 'Guardar publicación');
     btn.querySelector('.action-label').textContent = on ? 'Guardado' : 'Guardar';
+    if (post === currentPost) { syncRail(post); }   // tablet/escritorio: la columna lateral muestra la publicación visible
   }
 
   // Cambia el estado de una publicación y repinta todas las tarjetas con ese id.
@@ -415,6 +419,7 @@
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     btn.setAttribute('aria-label', (on ? 'Quitar me gusta' : 'Dar me gusta') + ' (' + count + ' en total)');
     btn.querySelector('.action-label').textContent = formatCount(count);
+    if (post === currentPost) { syncRail(post); }   // tablet/escritorio: la columna lateral muestra la publicación visible
   }
 
   // Cambia el estado de una publicación y repinta todas las tarjetas con ese id.
@@ -651,6 +656,7 @@
   // Punto de entrada: lo llama el observer cada vez que una publicación pasa a ser la visible.
   function showPanel(post) {
     currentPost = post;
+    syncRail(post);                                                  // columna de acciones (tablet y escritorio)
     if (!panel || !PANEL_MQ.matches) { return; }                     // 📱 celular: el panel no se ve, no se pide nada
     var p = postData[post.dataset.postId];
     if (!p || panelPostId === p.id) { return; }
@@ -829,22 +835,75 @@
 
   // ---------- Interacciones ----------
   // Un solo listener para todo el feed (también cubre las publicaciones agregadas después).
+  // Qué hace cada botón de acción sobre UNA publicación. Lo usan los dos lugares donde existen esos botones:
+  //   - dentro de cada publicación (📱 celular), vía el listener de #feed de abajo;
+  //   - en la columna lateral #railActions (📱 tablet y 🖥️ escritorio), ver "Columna de acciones".
+  function runAction(action, post) {
+    if (action === 'like') {
+      setLike(post, likedPosts[post.dataset.postId] !== true);
+    } else if (action === 'comment') {
+      // 📱 tablet / 🖥️ escritorio: los comentarios ya están a la vista en el panel; 📱 celular: modal
+      if (panel && PANEL_MQ.matches) { showPanel(post); focusPanelComments(); } else { openComments(post); }
+    } else if (action === 'save') {
+      toggleSave(post);
+    } else if (action === 'profile') {
+      notify('Perfil de ' + post.dataset.seller + ': próximamente');
+    }
+  }
+
   feed.addEventListener('click', function (ev) {
     var btn = ev.target.closest('[data-action]');
     var post = btn && btn.closest('.post');
     if (!post) { return; }
-
-    if (btn.dataset.action === 'like') {
-      setLike(post, likedPosts[post.dataset.postId] !== true);
-    } else if (btn.dataset.action === 'comment') {
-      // 📱 tablet / 🖥️ escritorio: los comentarios ya están a la vista en el panel; 📱 celular: modal
-      if (panel && PANEL_MQ.matches) { showPanel(post); focusPanelComments(); } else { openComments(post); }
-    } else if (btn.dataset.action === 'save') {
-      toggleSave(post);
-    } else if (btn.dataset.action === 'profile') {
-      notify('Perfil de ' + post.dataset.seller + ': próximamente');
-    }
+    runAction(btn.dataset.action, post);
   });
+
+  // ---------- Columna de acciones (📱 tablet y 🖥️ escritorio, ≥ 768px) ----------
+  // En pantallas grandes los botones (perfil, me gusta, comentar, guardar, WhatsApp) NO van encima de la foto: hay UNA
+  // sola columna (#railActions) a la derecha del celular, y esta sección la mantiene al día con la publicación visible:
+  //   1) syncRail(post) copia a la columna el estado de los botones de esa publicación (me gusta/guardado activos,
+  //      contadores, link de WhatsApp). Se llama al cambiar de publicación y cada vez que paintLike/paintSave repintan.
+  //   2) Un clic en la columna ejecuta la misma acción (runAction) sobre la publicación visible (currentPost).
+  // Los botones que están dentro de cada publicación siguen existiendo (los usa el celular); en ≥ 768px el CSS los oculta.
+  var rail = document.getElementById('railActions');
+
+  // Copia el estado visual de un botón al otro: clase is-active, atributos ARIA y el texto (contador / "Guardado")
+  function copyButtonState(from, to) {
+    if (!from || !to) { return; }
+    to.classList.toggle('is-active', from.classList.contains('is-active'));
+    ['aria-pressed', 'aria-label'].forEach(function (attr) {
+      var value = from.getAttribute(attr);
+      if (value === null) { to.removeAttribute(attr); } else { to.setAttribute(attr, value); }
+    });
+    var fromLabel = from.querySelector('.action-label');
+    var toLabel = to.querySelector('.action-label');
+    if (fromLabel && toLabel) { toLabel.textContent = fromLabel.textContent; }
+  }
+
+  function syncRail(post) {
+    if (!rail || !post) { return; }
+    copyButtonState(post.querySelector('.action-like'), rail.querySelector('.action-like'));
+    copyButtonState(post.querySelector('.action-save'), rail.querySelector('.action-save'));
+    rail.querySelector('.post-avatar').setAttribute('aria-label', 'Ver perfil de ' + post.dataset.seller);
+
+    var source = post.querySelector('.action-wsp');          // la publicación solo tiene botón si hay un número válido
+    var wsp = rail.querySelector('.action-wsp');
+    if (source) {
+      wsp.href = source.href;
+      wsp.setAttribute('aria-label', source.getAttribute('aria-label'));
+    } else {
+      wsp.removeAttribute('href');
+    }
+    wsp.hidden = !source;
+    rail.classList.add('is-ready');                           // hasta la primera sincronización la columna está invisible
+  }
+
+  if (rail) {
+    rail.addEventListener('click', function (ev) {
+      var btn = ev.target.closest('[data-action]');
+      if (btn && currentPost) { runAction(btn.dataset.action, currentPost); }
+    });
+  }
 
   feed.addEventListener('dblclick', function (ev) {
     if (ev.target.closest('a, button')) { return; }   // doble clic sobre un botón no es "doble toque"

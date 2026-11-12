@@ -98,6 +98,8 @@ def render_php(path, ctx):
             if e == "$demoJson": out.append(json.dumps(demo, ensure_ascii=False))
             elif e == "e(csrf_token())": out.append(ctx["csrf"])
             elif e == "e($defaultWhatsapp)": out.append(default_wa)
+            elif e == "e($donateUrl)": out.append("https://cafecito.app/")           # enlaces externos de landing.php
+            elif e == "e($repoUrl)": out.append("https://github.com/Naxthomy/pilchak")
             elif e == "(int) $maxImage": out.append(str(MAX_IMAGE))
             elif e == "(int) $maxVideo": out.append(str(MAX_VIDEO))
             elif e == "csrf_field()": out.append('<input type="hidden" name="csrf_token" value="%s">' % ctx["csrf"])
