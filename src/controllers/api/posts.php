@@ -359,6 +359,48 @@ try {
         case 'GET':
             // Misma consulta que controllers/posts/index.php, pero sin exponer
             // datos sensibles del usuario (solo id y nombre).
+            // --- BÚSQUEDA POR TÍTULO (bloque nuevo): GET ?q=texto ---
+            // Con "q" no vacío responde solo con las publicaciones cuyo título contiene el texto (coincidencia parcial).
+            // Sin "q" (o con q vacío) este bloque no hace nada y sigue el listado de siempre.
+            if (isset($_GET['q'])) {
+                if (!is_string($_GET['q'])) {
+                    apiError(400, 'El parámetro q debe ser un texto.');
+                }
+                $q = preg_replace('/\s+/u', ' ', $_GET['q']);
+                if ($q === null) {
+                    apiError(400, 'El parámetro q no es un texto UTF-8 válido.');
+                }
+                $q = trim($q);
+                if (function_exists('mb_substr')) {
+                    $q = mb_substr($q, 0, 100, 'UTF-8');   // tope de largo de la búsqueda
+                }
+
+                if ($q !== '') {
+                    // % y _ son comodines de LIKE: se escapan con "|" para que el usuario busque texto literal
+                    $like = '%' . strtr($q, ['|' => '||', '%' => '|%', '_' => '|_']) . '%';
+
+                    $stmt = $pdo->prepare(
+                        'SELECT ' . apiPostColumns($pdo) . '
+                         FROM posts p
+                         JOIN users u ON p.user_id = u.id
+                         WHERE p.title LIKE :q ESCAPE \'|\'
+                         ORDER BY p.created_at DESC
+                         LIMIT ' . API_LIST_LIMIT
+                    );
+                    $stmt->bindValue(':q', $like, PDO::PARAM_STR);
+                    $stmt->execute();
+                    $found = apiAttachLikes($pdo, array_map('apiShapePost', $stmt->fetchAll(PDO::FETCH_ASSOC)));
+
+                    header('Cache-Control: no-store');   // igual que el listado: "liked" depende de quién pide
+                    apiResponse(200, [
+                        'status' => 'success',
+                        'count'  => count($found),
+                        'data'   => $found,
+                        'query'  => $q,
+                    ]);
+                }
+            }
+
             $stmt = $pdo->query('
                 SELECT ' . apiPostColumns($pdo) . '
                 FROM posts p

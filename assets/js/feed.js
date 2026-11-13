@@ -965,6 +965,191 @@
     updateArrows();
   }
 
+  // ---------- Buscador por título ----------
+  // Bloque NUEVO (aditivo). HTML: <div id="feedSearch"> en landing.php · estilos: .feed-search* en styles.css ·
+  // API: GET posts.php?q=texto (filtra por título; sin "q" el endpoint responde igual que siempre).
+  // - Se abre con la lupa de la barra superior (data-nav="search") y se cierra con la X o con Escape (restaura el feed).
+  // - Debounce de 300 ms sobre el evento "input". Reutiliza fromApi() y append(): las publicaciones encontradas
+  //   tienen los mismos botones (me gusta, comentar, guardar, WhatsApp) que las del feed normal.
+  // - Mientras hay un texto, no se muestran las publicaciones de demostración (no tienen título en la base).
+  (function () {
+    var bar      = document.getElementById('feedSearch');
+    var input    = document.getElementById('feedSearchInput');
+    if (!bar || !input) { return; }
+    var closeBtn = document.getElementById('feedSearchClose');
+    var openBtn  = document.querySelector('[data-nav="search"]');
+    var phone    = feed.closest('.phone');
+
+    var DEBOUNCE_MS = 300;
+    var MAX_LEN = 100;       // mismo tope que el maxlength del input y que la API
+    var timer = null;        // debounce
+    var seq = 0;             // número de búsqueda: descarta respuestas viejas
+    var controller = null;   // AbortController de la petición en curso
+    var lastQuery = '';      // texto aplicado al feed ('' = feed normal)
+    var busy = false;        // hay una búsqueda en curso (distinto de la carga inicial)
+    var noticeEl = null;     // mensaje "sin resultados" o de error
+
+    function normalize(text) { return text.replace(/\s+/g, ' ').trim().slice(0, MAX_LEN); }
+
+    function setLoading(on) {
+      busy = on;
+      bar.classList.toggle('is-loading', on);
+      feed.setAttribute('aria-busy', on ? 'true' : 'false');
+    }
+
+    function removeNotice() { if (noticeEl) { noticeEl.remove(); noticeEl = null; } }
+
+    // Quita las publicaciones dibujadas (pausa sus videos y las saca del observer)
+    function clearPosts() {
+      feed.querySelectorAll('.post').forEach(function (post) {
+        observer.unobserve(post);
+        var video = post.querySelector('video');
+        if (video) { video.pause(); }
+        post.remove();
+      });
+      activeVideo = null;
+      removeNotice();
+      feed.scrollTop = 0;
+    }
+
+    // Sin resultados: el panel lateral no debe seguir mostrando una publicación que ya no está
+    function resetPanel() {
+      currentPost = null;
+      if (!panel || !panelEls) { return; }
+      clearTimeout(panelTimer);
+      panelRequestId++;
+      panelPostId = null;
+      panelEls.seller.textContent = 'Pilchak';
+      panelEls.date.textContent = '';
+      panelEls.title.textContent = 'Sin resultados';
+      panelEls.desc.textContent = '';
+      panelEls.price.textContent = '';
+      panelEls.size.textContent = '';
+      panelEls.chat.hidden = true;
+      panelEls.list.textContent = '';
+      setPanelCount(null);
+      setPanelStatus('');
+    }
+
+    function showNotice(title, text, label, onClick) {
+      removeNotice();
+      noticeEl = el('div', 'feed-status feed-search-notice');
+      noticeEl.setAttribute('role', 'status');
+      noticeEl.appendChild(el('p', 'feed-search-notice-title', title));
+      noticeEl.appendChild(el('p', null, text));
+      var btn = el('button', 'btn btn-guest', label);
+      btn.type = 'button';
+      btn.addEventListener('click', onClick);
+      noticeEl.appendChild(btn);
+      feed.appendChild(noticeEl);
+    }
+
+    function fetchPosts(q) {
+      if (controller) { controller.abort(); }
+      controller = window.AbortController ? new AbortController() : null;
+      var url = API_URL + (q ? (API_URL.indexOf('?') === -1 ? '?' : '&') + 'q=' + encodeURIComponent(q) : '');
+      var options = { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' };
+      if (controller) { options.signal = controller.signal; }
+      return fetch(url, options).then(function (res) {
+        return res.text().then(function (text) {
+          var body = null;
+          try { body = JSON.parse(text); } catch (e) { /* respuesta no JSON */ }
+          if (!res.ok || !body || body.status !== 'success' || !Array.isArray(body.data)) {
+            throw new Error('Respuesta inválida de la API');
+          }
+          return body.data;
+        });
+      });
+    }
+
+    // Si la carga inicial del feed todavía no terminó, espera (así no se mezclan sus publicaciones con las del filtro)
+    function waitForFeed(callback, tries) {
+      tries = tries || 0;
+      if (busy || feed.getAttribute('aria-busy') !== 'true' || tries > 40) { callback(); return; }
+      setTimeout(function () { waitForFeed(callback, tries + 1); }, 250);
+    }
+
+    function clearSearch() {
+      input.value = '';
+      apply();
+      input.focus();
+    }
+
+    function run(q) {
+      var mine = ++seq;
+      waitForFeed(function () {
+        if (mine !== seq) { return; }
+        setLoading(true);
+        fetchPosts(q).then(function (items) {
+          if (mine !== seq) { return; }
+          setLoading(false);
+          clearStatus();   // quita un posible "No pudimos cargar..." de la carga inicial
+          clearPosts();
+          var posts = items.map(fromApi);
+          if (!q) { append(posts.concat(readDemo())); return; }   // texto borrado: feed normal
+          if (!posts.length) {
+            resetPanel();
+            showNotice('Sin resultados', 'No encontramos publicaciones con “' + q + '” en el título.', 'Borrar búsqueda', clearSearch);
+            return;
+          }
+          append(posts);
+        }).catch(function () {
+          if (mine !== seq) { return; }   // fue reemplazada por otra búsqueda (o cancelada)
+          setLoading(false);
+          clearStatus();
+          clearPosts();
+          resetPanel();
+          showNotice('No pudimos buscar', 'Revisá tu conexión e intentá de nuevo.', 'Reintentar', function () { run(lastQuery); });
+        });
+      });
+    }
+
+    // Aplica el texto actual (si cambió respecto de lo que ya se está mostrando)
+    function apply() {
+      clearTimeout(timer);
+      var q = normalize(input.value);
+      if (q === lastQuery) { return; }
+      lastQuery = q;
+      run(q);
+    }
+
+    function open() {
+      bar.hidden = false;
+      if (phone) { phone.classList.add('is-searching'); }
+      if (openBtn) { openBtn.setAttribute('aria-expanded', 'true'); }
+      input.focus();
+    }
+
+    function close() {
+      clearTimeout(timer);
+      input.value = '';
+      bar.hidden = true;
+      if (phone) { phone.classList.remove('is-searching'); }
+      if (openBtn) { openBtn.setAttribute('aria-expanded', 'false'); }
+      input.blur();
+      apply();   // con el texto vacío restaura el feed normal (no hace nada si ya estaba normal)
+    }
+
+    input.addEventListener('input', function () {
+      clearTimeout(timer);
+      timer = setTimeout(apply, DEBOUNCE_MS);
+    });
+    input.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape') { ev.preventDefault(); close(); }
+      else if (ev.key === 'Enter') { ev.preventDefault(); apply(); input.blur(); }   // Enter: busca ya y cierra el teclado
+    });
+    closeBtn.addEventListener('click', close);
+
+    // La lupa ya existía y solo mostraba "Búsqueda: próximamente" (landing.js). Se intercepta en la fase de captura
+    // para abrir el buscador en su lugar. Para conservar el aviso viejo, borrá este listener.
+    document.addEventListener('click', function (ev) {
+      var btn = ev.target.closest ? ev.target.closest('[data-nav="search"]') : null;
+      if (!btn) { return; }
+      ev.stopPropagation();
+      if (bar.hidden) { open(); } else { close(); }
+    }, true);
+  })();
+
   loadSaved();
   load();
 })();

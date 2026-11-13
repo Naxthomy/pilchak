@@ -188,6 +188,18 @@ $demoJson = json_encode($demoPosts, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS 
 
   </div><!-- /.phone -->
 
+  <!-- ===== BUSCADOR POR TÍTULO (nuevo) =====
+       Oculto hasta tocar la lupa de arriba (data-nav="search"). Lo gestiona assets/js/feed.js (sección "Buscador por título"). -->
+       <div class="feed-search" id="feedSearch" role="search" hidden>
+    <div class="feed-search-box">
+      <svg class="feed-icon feed-search-icon" aria-hidden="true"><use href="#i-search"/></svg>
+      <input type="search" id="feedSearchInput" class="feed-search-input" placeholder="Buscar por título…" aria-label="Buscar publicaciones por título" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" maxlength="100">
+      <button type="button" class="feed-search-close" id="feedSearchClose" aria-label="Cerrar búsqueda">
+        <svg class="feed-icon" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+  </div>
+
   <!-- ===== COLUMNA DE ACCIONES + FLECHAS (escritorio y tablet) =====
        Vive AFUERA del celular, a su derecha, para que la foto/video ocupe todo el marco y el marco quede centrado.
        En celular (< 768px) esta columna se oculta (CSS): ahí los botones van dentro de cada publicación.

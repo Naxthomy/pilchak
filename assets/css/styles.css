@@ -346,3 +346,86 @@
     background: var(--accent-soft);
     box-shadow: 0 0 8px rgba(154, 167, 255, .55);
   }  
+/* =====================================================================
+   BUSCADOR POR TÍTULO DEL FEED (nuevo, aditivo)
+   Barra flotante bajo la barra superior; se abre con la lupa. Lo maneja feed.js.
+   ===================================================================== */
+.feed-search {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(64px + env(safe-area-inset-top, 0px));
+  z-index: 11;
+  padding: 0 14px;
+  pointer-events: none;            /* solo la caja recibe toques: no bloquea el scroll del feed */
+}
+.feed-search[hidden] { display: none; }
+
+.feed-search-box {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 6px 0 14px;
+  background: var(--glass-strong);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  box-shadow: var(--card-shadow);
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+.feed-search-box:focus-within {
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 3px rgba(111, 125, 242, .25), var(--card-shadow);
+}
+
+.feed-search .feed-icon { width: 20px; height: 20px; flex: none; }
+.feed-search-icon { color: var(--text-muted); }
+.feed-search.is-loading .feed-search-icon { animation: feed-search-pulse .9s ease-in-out infinite; }
+@keyframes feed-search-pulse { 50% { opacity: .35; } }
+
+.feed-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+  color: var(--text-main);
+  font-size: 16px;                 /* 16px evita el zoom automático en iOS */
+}
+.feed-search-input::placeholder { color: var(--text-muted); opacity: 1; }
+.feed-search-input::-webkit-search-cancel-button,
+.feed-search-input::-webkit-search-decoration { -webkit-appearance: none; display: none; }
+
+.feed-search-close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .08);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color .2s ease, background .2s ease;
+}
+.feed-search-close:hover,
+.feed-search-close:focus-visible { color: #fff; background: rgba(255, 255, 255, .16); }
+.feed-search-close .feed-icon { width: 16px; height: 16px; }
+
+/* Con la barra abierta, las publicaciones de texto bajan un poco para que el título no quede tapado */
+.phone.is-searching .post-text { padding-top: calc(120px + env(safe-area-inset-top, 0px)); }
+
+/* Mensaje "sin resultados" / error (reutiliza .feed-status de landing.css) */
+.feed-search-notice { padding-top: calc(110px + env(safe-area-inset-top, 0px)); }
+.feed-search-notice p { overflow-wrap: anywhere; }
+.feed-search-notice-title { font-size: 1.15rem; font-weight: 700; color: var(--text-main) !important; }
