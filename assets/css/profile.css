@@ -20,6 +20,7 @@
     --glass: rgba(14, 19, 32, .66);
     --glass-hi: rgba(255, 255, 255, .06);
     --cover: #1a2145;
+    --app-max: 500px;
     --font-mono: ui-monospace, "JetBrains Mono", "Roboto Mono", SFMono-Regular, Menlo, Consolas, monospace;
 }
 
@@ -56,7 +57,7 @@ body::before {
 /* Tarjeta principal (glass), centrada y flotante en escritorio */
 .profile {
     position: relative;
-    max-width: 520px;
+    max-width: var(--app-max);
     margin: 24px auto;
     overflow: hidden;
     background:
@@ -251,7 +252,7 @@ body::before {
     bottom: 24px;
     transform: translateX(-50%);
     z-index: 20;
-    width: min(100%, 520px);
+    width: min(100%, var(--app-max));
     display: flex;
     align-items: center;
     justify-content: space-around;
@@ -328,8 +329,6 @@ body::before {
 
 /* 📱 TABLET (≥ 768px): tarjeta y barra inferior más anchas (mismo ancho entre sí para que se vean como una sola pieza) */
 @media (min-width: 768px) {
-    .profile { max-width: 620px; }              /* tarjeta del perfil */
-    .bottom-nav { width: min(100%, 620px); }    /* barra inferior: siempre igual de ancha que la tarjeta */
     .grid { gap: 6px; padding: 6px; }           /* más aire entre miniaturas */
     .profile__cover { height: 190px; }          /* portada algo más alta */
 }

@@ -35,7 +35,7 @@ $defaultWhatsapp = '5491100000001';
 // ENLACES EXTERNOS de los paneles (escritorio) y del acceso "Colaborar" (móvil).
 // DONACIONES: la plataforma es Cafecito (https://cafecito.app).
 // REEMPLAZÁ $donateUrl por tu página real de Cafecito (ej: https://cafecito.app/tu-usuario).
-$donateUrl = 'https://cafecito.app/';
+$donateUrl = 'https://cafecito.app/pilchak';
 $repoUrl   = 'https://github.com/Naxthomy/pilchak';
 
 // JSON seguro para incrustar en <script type="application/json"> (escapa < > & ' ")
@@ -65,7 +65,7 @@ $demoJson = json_encode($demoPosts, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS 
   <script src="/assets/js/publish.js" defer></script>
   <?php endif; ?>
 </head>
-<body class="landing">
+<body class="landing" data-view="home">
 
   <!-- Iconos SVG: se definen UNA vez y se reutilizan con <use href="#id"> (también desde assets/js/feed.js).
        Los trazos y rellenos se pintan desde landing.css (.feed-icon), por eso los <symbol> no llevan fill/stroke. -->
@@ -124,6 +124,9 @@ $demoJson = json_encode($demoPosts, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS 
   <div class="stage">
   <div class="phone">
 
+  <!-- Marco móvil (max-width 500px, centrado) -->
+  <div class="app-frame">
+
   <!-- ===== BARRA SUPERIOR =====
        - Lupa (siempre).
        - Cafecito ("Colaborar"): SIEMPRE visible en celular y tablet (< 1200px), con o sin sesión.
@@ -161,6 +164,22 @@ $demoJson = json_encode($demoPosts, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS 
 
   <!-- Barra inferior: inicio (casita), publicar (+) y perfil -->
   <nav class="feed-nav feed-nav-bottom" aria-label="Secciones">
+     <?php if ($isAuth): $me = current_user(); ?>
+      <!-- Vista Perfil: se muestra en lugar del feed (data-view="profile"). La grilla la llena landing.js -->
+      <section id="profileView" class="profile-view" hidden aria-label="Mi perfil" data-user-id="<?= e($me['id']) ?>">
+         <header class="pv-head">
+       <div class="pv-avatar" aria-hidden="true"><?= e(function_exists('mb_substr') ? mb_strtoupper(mb_substr($me['name'], 0, 2, 'UTF-8'), 'UTF-8') : strtoupper(substr($me['name'], 0, 2))) ?></div>
+        <h1 class="pv-name">@<?= e($me['name']) ?></h1>
+        <p class="pv-count"><strong id="pvCount">0</strong> publicaciones</p>
+       <form method="post" action="/src/controllers/auth/logout.php" class="m-0">
+        <?= csrf_field() ?>
+          <button type="submit" class="pv-btn">Cerrar sesión</button>
+        </form>
+      </header>
+      <div class="pv-grid" id="pvGrid"></div>
+      <p class="pv-empty" id="pvEmpty" hidden>Todavía no publicaste nada.</p>
+    </section>
+    <?php endif; ?>
     <button type="button" class="feed-nav-btn is-active" data-nav="home" aria-label="Inicio">
       <svg class="feed-icon" aria-hidden="true"><use href="#i-home"/></svg>
     </button>
@@ -175,7 +194,7 @@ $demoJson = json_encode($demoPosts, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS 
       </a>
     <?php endif; ?>
     <?php if ($isAuth): ?>
-      <a class="feed-nav-btn" href="/src/views/profile/index.php" aria-label="Mi perfil">
+      <a class="feed-nav-btn" href="/src/views/profile/index.php" data-nav="profile" aria-label="Mi perfil">
         <svg class="feed-icon" aria-hidden="true"><use href="#i-user"/></svg>
       </a>
     <?php else: ?>
@@ -195,7 +214,7 @@ $demoJson = json_encode($demoPosts, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS 
       <svg class="feed-icon feed-search-icon" aria-hidden="true"><use href="#i-search"/></svg>
       <input type="search" id="feedSearchInput" class="feed-search-input" placeholder="Buscar por título…" aria-label="Buscar publicaciones por título" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" maxlength="100">
       <button type="button" class="feed-search-close" id="feedSearchClose" aria-label="Cerrar búsqueda">
-        <svg class="feed-icon" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        <svg class="feed-icon" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/></svg>
       </button>
     </div>
   </div>
@@ -352,6 +371,7 @@ $demoJson = json_encode($demoPosts, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS 
   </aside>
 
   </div><!-- /.app-shell -->
+  </div><!-- /.app-frame -->
 
   <!-- Aviso temporal (confirmaciones y "próximamente") -->
   <div class="feed-toast" id="feedToast" role="status" aria-live="polite"></div>

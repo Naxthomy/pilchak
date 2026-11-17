@@ -55,6 +55,17 @@ try {
     abort_with(500, 'No pudimos cargar tu perfil. Intentá de nuevo más tarde.');
 }
 
+// Pestaña activa: solo 'videos' (lista blanca); cualquier otro valor muestra todas las publicaciones
+$tab = input_str($_GET, 'tab') === 'videos' ? 'videos' : 'all';
+
+// Publicaciones con video: media_type = 'video' y ruta de archivo válida (misma regla con la que se dibuja la miniatura).
+// Cada miniatura de video enlaza a controllers/posts/show.php?id=<uuid>: la ruta que ya existía para abrir UN post
+// (exige sesión, valida el UUID y consulta con sentencia preparada); su vista muestra el video con controles.
+$videoPosts = array_values(array_filter($posts, function ($post) {
+    return ($post['media_type'] ?? '') === 'video' && upload_url($post['media_path'] ?? null) !== '';
+}));
+$shownPosts = $tab === 'videos' ? $videoPosts : $posts;
+
 $notice    = flash_get('profile_notice');   // ['type' => 'ok'|'error', 'msg' => '...'] o null
 $avatarUrl = upload_url($user['avatar']);   // '' si no hay foto (o la ruta no es válida)
 $coverUrl  = upload_url($user['cover']);
@@ -67,17 +78,16 @@ $maxProfile = upload_limit_bytes(UPLOAD_MAX_PROFILE_IMAGE);
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#05070d">
     <title>Perfil · Pilchak</title>
-    <link rel="stylesheet" href="/assets/css/styles.css">
     <link rel="stylesheet" href="/assets/css/profile.css">
 </head>
-<body class="pk-body pk-body--profile">
-<div class="pk-shell pk-shell--profile">
-<main class="profile pk-feed">
+<body class="profile-page">
+<main class="profile">
 
     <!-- Navegación mínima: volver al feed y cerrar sesión (POST con token CSRF) -->
-    <nav class="profile__bar pk-feed__head" aria-label="Navegación">
+    <nav class="profile__bar" aria-label="Navegación">
         <a class="btn" href="/">&larr; Inicio</a>
         <form method="post" action="/src/controllers/auth/logout.php">
             <?= csrf_field() ?>
@@ -92,7 +102,7 @@ $maxProfile = upload_limit_bytes(UPLOAD_MAX_PROFILE_IMAGE);
         <p class="notice notice--error">Falta aplicar la migración 002 en la base de datos para usar fotos de perfil y portada.</p>
     <?php endif; ?>
 
-    <header class="profile__head pk-card pk-card--profile">
+    <header class="profile__head">
         <div class="profile__cover"
              <?php if ($coverUrl !== ''): ?>style="background-image:url('<?= e($coverUrl) ?>')"<?php endif; ?>></div>
 
@@ -116,24 +126,36 @@ $maxProfile = upload_limit_bytes(UPLOAD_MAX_PROFILE_IMAGE);
         <button type="button" class="btn" id="open-edit">Editar fotos</button>
     </header>
 
-    <nav class="tabs pk-tabs" aria-label="Contenido del perfil">
-        <span class="tabs__item tabs__item--active">Mis publicaciones</span>
+    <nav class="tabs" aria-label="Contenido del perfil">
+        <a class="tabs__item<?= $tab === 'all' ? ' tabs__item--active' : '' ?>" href="/src/views/profile/index.php"<?= $tab === 'all' ? ' aria-current="page"' : '' ?>>Mis publicaciones</a>
+        <a class="tabs__item<?= $tab === 'videos' ? ' tabs__item--active' : '' ?>" href="/src/views/profile/index.php?tab=videos"<?= $tab === 'videos' ? ' aria-current="page"' : '' ?>>Videos</a>
     </nav>
 
-    <?php if (!$posts): ?>
-        <section class="empty pk-card pk-posts__empty">
-            <h2>Subí tu primera pilcha</h2>
-            <p>Cuando publiques algo, va a aparecer acá.</p>
-        </section>
+    <?php if (!$shownPosts): ?>
+        <?php if ($tab === 'videos'): ?>
+            <section class="empty">
+                <h2>Todavía no subiste videos</h2>
+                <p>Cuando publiques un video, va a aparecer acá.</p>
+            </section>
+        <?php else: ?>
+            <section class="empty">
+                <h2>Subí tu primera pilcha</h2>
+                <p>Cuando publiques algo, va a aparecer acá.</p>
+            </section>
+        <?php endif; ?>
     <?php else: ?>
-        <section class="grid pk-posts pk-posts--grid" aria-label="Mis publicaciones">
-            <?php foreach ($posts as $i => $post): ?>
+        <section class="grid" aria-label="<?= $tab === 'videos' ? 'Mis videos' : 'Mis publicaciones' ?>">
+            <?php foreach ($shownPosts as $i => $post): ?>
                 <?php $mediaUrl = upload_url($post['media_path'] ?? null); ?>
-                <article class="tile pk-post tile--<?= $i % 5 ?><?= $mediaUrl !== '' ? ' tile--media' : '' ?>">
+                <article class="tile tile--<?= $i % 5 ?><?= $mediaUrl !== '' ? ' tile--media' : '' ?><?= $mediaUrl !== '' && ($post['media_type'] ?? '') === 'video' ? ' tile--video' : '' ?>">
                     <?php if ($mediaUrl !== '' && ($post['media_type'] ?? '') === 'image'): ?>
                         <img class="tile__media" src="<?= e($mediaUrl) ?>" alt="" loading="lazy">
                     <?php elseif ($mediaUrl !== '' && ($post['media_type'] ?? '') === 'video'): ?>
                         <video class="tile__media" src="<?= e($mediaUrl) ?>#t=0.1" muted playsinline preload="metadata"></video>
+                        <span class="tile__play" aria-hidden="true"></span>
+                        <?php if (is_valid_uuid($post['id'])): ?>
+                            <a class="tile__link" href="/src/controllers/posts/show.php?id=<?= e($post['id']) ?>" aria-label="Ver el video: <?= e($post['title']) ?>"></a>
+                        <?php endif; ?>
                     <?php endif; ?>
                     <h2 class="tile__title"><?= e($post['title']) ?></h2>
                     <p class="tile__text"><?= e(function_exists('mb_strimwidth') ? mb_strimwidth($post['content'], 0, 60, '…', 'UTF-8') : substr($post['content'], 0, 60)) ?></p>
@@ -142,8 +164,27 @@ $maxProfile = upload_limit_bytes(UPLOAD_MAX_PROFILE_IMAGE);
         </section>
     <?php endif; ?>
 
-</main>
-</div>
+    </main>
+
+<!-- Iconos de la barra inferior (mismos que el feed) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+</svg>
+
+<!-- Barra inferior: la misma del feed (Inicio · Publicar · Perfil). Perfil = sección actual -->
+<nav class="bottom-nav" aria-label="Secciones">
+    <a class="bottom-nav__item" href="/" aria-label="Inicio">
+        <svg class="bottom-nav__icon" aria-hidden="true"><use href="#i-home"/></svg>
+    </a>
+    <a class="bottom-nav__item bottom-nav__item--publish" href="/?publish=1" aria-label="Publicar">
+        <svg class="bottom-nav__icon" aria-hidden="true"><use href="#i-plus"/></svg>
+    </a>
+    <a class="bottom-nav__item is-active" href="/src/views/profile/index.php" aria-label="Mi perfil" aria-current="page">
+        <svg class="bottom-nav__icon" aria-hidden="true"><use href="#i-user"/></svg>
+    </a>
+</nav>
 
 <dialog id="edit-dialog" class="dialog">
     <form method="post" enctype="multipart/form-data" action="/src/controllers/profile/upload.php">

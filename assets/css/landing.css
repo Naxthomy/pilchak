@@ -10,6 +10,7 @@
    ===================================================================== */
 
    :root {
+    --app-max: 500px;   /* ancho del marco móvil (el perfil usa el mismo valor en profile.css) */
     --ease: cubic-bezier(.22, .61, .36, 1);
     --stitch: #8f9bf5;
     --like: #ff4d6a;
@@ -58,6 +59,29 @@
     overscroll-behavior: none;
   }
   
+/* ---- Marco móvil: contiene feed + barra superior (búsqueda) + barra inferior ---- */
+.app-frame {
+  position: relative;
+  width: 100%;
+  max-width: var(--app-max);
+  height: 100vh;
+  height: 100dvh;
+  margin: 0 auto;
+  overflow: hidden;
+  background: #05070d;
+}
+/* Escritorio y tablet (> 560px): tarjeta flotante, igual que la del perfil */
+@media (min-width: 561px) {
+  .app-frame {
+    height: calc(100vh - 48px);
+    height: calc(100dvh - 48px);
+    margin: 24px auto;
+    border: 1px solid rgba(205, 215, 235, .22);
+    border-radius: 30px;
+    box-shadow: 0 0 0 6px rgba(14, 19, 31, .55), 0 30px 80px rgba(0, 0, 0, .6), 0 0 60px rgba(90, 120, 220, .08);
+  }
+}
+
   /* ---- Overlay de carga ---- */
   .splash {
     position: fixed;
@@ -1037,6 +1061,15 @@
     .feed-nav-top { gap: 6px; padding-left: 10px; padding-right: 10px; }
   }
   
+  /* Barra de búsqueda: mismo ancho que el marco móvil, centrada (también si es fixed/absolute) */
+.search-bar {                      /* ← cambiá por el selector real */
+  width: min(100%, var(--app-max));
+  max-width: var(--app-max);
+  left: 0; right: 0;               /* con margin auto la centra si es fixed/absolute; si es estática, se ignora */
+  margin-inline: auto;
+  box-sizing: border-box;
+}
+
   /* ---- Movimiento reducido: sin animaciones, solo un fade corto ---- */
   @media (prefers-reduced-motion: reduce) {
     :root { --splash-hold: .6s; --splash-fade: .25s; }
@@ -1046,3 +1079,49 @@
     .action-save.is-active .feed-icon { animation: none; }
     .btn-donate, .social-link, .feed-arrow { transition: none; }
   }
+
+/* ---- Vista Perfil: reemplaza al feed dentro del mismo marco, con la barra inferior visible ---- */
+.landing[data-view="profile"] .feed,
+.landing[data-view="profile"] .post-actions,
+.landing[data-view="profile"] .stage-rail,
+.landing[data-view="profile"] .side-right,
+.landing[data-view="profile"] .feed-nav-top { display: none !important; }
+
+.profile-view {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  bottom: var(--nav-bottom);            /* deja libre la barra inferior */
+  max-width: var(--app-max);
+  margin-inline: auto;
+  z-index: 5;                           /* debajo de .feed-nav (z-index: 10) */
+  overflow-y: auto;
+  background: #05070d;
+  color: #f1f4fb;
+  scrollbar-width: none;
+}
+.profile-view[hidden] { display: none; }
+.profile-view::-webkit-scrollbar { width: 0; }
+
+.pv-head { text-align: center; padding: calc(20px + env(safe-area-inset-top, 0px)) 16px 14px; }
+.pv-avatar {
+  width: 88px; height: 88px; margin: 0 auto 10px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; background: #1b2236; font-size: 28px; font-weight: 700;
+}
+.pv-name  { margin: 0 0 2px; font-size: 18px; }
+.pv-count { margin: 0 0 12px; font-size: 13px; color: #a8b3cc; }
+.pv-count strong { color: #fff; font-size: 16px; }
+.pv-btn {
+  padding: 6px 16px; border-radius: 999px; cursor: pointer;
+  border: 1.5px solid rgba(205, 215, 235, .38); background: none; color: #f1f4fb; font-size: 14px;
+}
+.pv-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
+.pv-tile {
+  position: relative; display: flex; align-items: flex-end;
+  aspect-ratio: 3 / 4; overflow: hidden; padding: 8px;
+  background: #1b2236; color: #fff; text-decoration: none;
+}
+.pv-tile:hover, .pv-tile:focus-visible { color: #fff; text-decoration: none; filter: brightness(1.12); }
+.pv-media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.pv-title { position: relative; z-index: 1; font-size: 12px; font-weight: 600; line-height: 1.2; text-shadow: 0 1px 3px rgba(0, 0, 0, .8); }
+.pv-empty { padding: 40px 24px; text-align: center; color: #a8b3cc; }

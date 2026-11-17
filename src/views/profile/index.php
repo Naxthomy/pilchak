@@ -55,6 +55,17 @@ try {
     abort_with(500, 'No pudimos cargar tu perfil. Intentá de nuevo más tarde.');
 }
 
+// Pestaña activa: solo 'videos' (lista blanca); cualquier otro valor muestra todas las publicaciones
+$tab = input_str($_GET, 'tab') === 'videos' ? 'videos' : 'all';
+
+// Publicaciones con video: media_type = 'video' y ruta de archivo válida (misma regla con la que se dibuja la miniatura).
+// Cada miniatura de video enlaza a controllers/posts/show.php?id=<uuid>: la ruta que ya existía para abrir UN post
+// (exige sesión, valida el UUID y consulta con sentencia preparada); su vista muestra el video con controles.
+$videoPosts = array_values(array_filter($posts, function ($post) {
+    return ($post['media_type'] ?? '') === 'video' && upload_url($post['media_path'] ?? null) !== '';
+}));
+$shownPosts = $tab === 'videos' ? $videoPosts : $posts;
+
 $notice    = flash_get('profile_notice');   // ['type' => 'ok'|'error', 'msg' => '...'] o null
 $avatarUrl = upload_url($user['avatar']);   // '' si no hay foto (o la ruta no es válida)
 $coverUrl  = upload_url($user['cover']);
@@ -116,23 +127,35 @@ $maxProfile = upload_limit_bytes(UPLOAD_MAX_PROFILE_IMAGE);
     </header>
 
     <nav class="tabs" aria-label="Contenido del perfil">
-        <span class="tabs__item tabs__item--active">Mis publicaciones</span>
+        <a class="tabs__item<?= $tab === 'all' ? ' tabs__item--active' : '' ?>" href="/src/views/profile/index.php"<?= $tab === 'all' ? ' aria-current="page"' : '' ?>>Mis publicaciones</a>
+        <a class="tabs__item<?= $tab === 'videos' ? ' tabs__item--active' : '' ?>" href="/src/views/profile/index.php?tab=videos"<?= $tab === 'videos' ? ' aria-current="page"' : '' ?>>Videos</a>
     </nav>
 
-    <?php if (!$posts): ?>
-        <section class="empty">
-            <h2>Subí tu primera pilcha</h2>
-            <p>Cuando publiques algo, va a aparecer acá.</p>
-        </section>
+    <?php if (!$shownPosts): ?>
+        <?php if ($tab === 'videos'): ?>
+            <section class="empty">
+                <h2>Todavía no subiste videos</h2>
+                <p>Cuando publiques un video, va a aparecer acá.</p>
+            </section>
+        <?php else: ?>
+            <section class="empty">
+                <h2>Subí tu primera pilcha</h2>
+                <p>Cuando publiques algo, va a aparecer acá.</p>
+            </section>
+        <?php endif; ?>
     <?php else: ?>
-        <section class="grid" aria-label="Mis publicaciones">
-            <?php foreach ($posts as $i => $post): ?>
+        <section class="grid" aria-label="<?= $tab === 'videos' ? 'Mis videos' : 'Mis publicaciones' ?>">
+            <?php foreach ($shownPosts as $i => $post): ?>
                 <?php $mediaUrl = upload_url($post['media_path'] ?? null); ?>
-                <article class="tile tile--<?= $i % 5 ?><?= $mediaUrl !== '' ? ' tile--media' : '' ?>">
+                <article class="tile tile--<?= $i % 5 ?><?= $mediaUrl !== '' ? ' tile--media' : '' ?><?= $mediaUrl !== '' && ($post['media_type'] ?? '') === 'video' ? ' tile--video' : '' ?>">
                     <?php if ($mediaUrl !== '' && ($post['media_type'] ?? '') === 'image'): ?>
                         <img class="tile__media" src="<?= e($mediaUrl) ?>" alt="" loading="lazy">
                     <?php elseif ($mediaUrl !== '' && ($post['media_type'] ?? '') === 'video'): ?>
                         <video class="tile__media" src="<?= e($mediaUrl) ?>#t=0.1" muted playsinline preload="metadata"></video>
+                        <span class="tile__play" aria-hidden="true"></span>
+                        <?php if (is_valid_uuid($post['id'])): ?>
+                            <a class="tile__link" href="/src/controllers/posts/show.php?id=<?= e($post['id']) ?>" aria-label="Ver el video: <?= e($post['title']) ?>"></a>
+                        <?php endif; ?>
                     <?php endif; ?>
                     <h2 class="tile__title"><?= e($post['title']) ?></h2>
                     <p class="tile__text"><?= e(function_exists('mb_strimwidth') ? mb_strimwidth($post['content'], 0, 60, '…', 'UTF-8') : substr($post['content'], 0, 60)) ?></p>
