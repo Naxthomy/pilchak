@@ -18,7 +18,13 @@ declare(strict_types=1);
  *             { "status": "success", "data": { ...post... } }          (POST)
  *   error  -> { "status": "error", "message": "...", "errors": [...] }
  *   post   -> { id, title, content, phone, media_type, media_url, price, size, created_at, updated_at, user_id,
- *               user_name, likes_count, liked }
+ *               user_name, user_avatar, is_own, following, likes_count, liked }
+ *             user_avatar: URL pública de la foto de perfil del autor ('/assets/img/uploads/...') o null si no tiene
+ *             (o si falta la migración 002).
+ *             is_own: true si el post es del usuario de la sesión (siempre false para un invitado).
+ *             following: true si el usuario de la sesión YA SIGUE al autor (siempre false para un invitado y en
+ *             posts propios). Los seguimientos se hacen en follows.php; requiere la tabla user_follows (migración 008):
+ *             sin ella el GET sigue funcionando y following = false.
  *             price: texto decimal "15000.00" (null en publicaciones viejas sin precio)   size: "M", "42"... (o null)
  *             media_type: 'image' | 'video' | null     media_url: '/assets/img/uploads/...' | null
  *             likes_count: total de "me gusta" de la publicación (de todos los usuarios), contado en la base.
@@ -305,14 +311,73 @@ function apiAttachLikes(PDO $pdo, array $posts): array
     }, $posts);
 }
 
-/** Lista de columnas de un post (constante: no incluye datos del usuario). */
+/** ¿Existe la columna users.avatar? (migración 002; se consulta una vez por petición). */
+function apiHasAvatarColumn(PDO $pdo): bool
+{
+    static $exists = null;
+
+    if ($exists === null) {
+        $exists = $pdo->query("SHOW COLUMNS FROM users LIKE 'avatar'")->fetch() !== false;
+        if (!$exists) {
+            error_log('[API posts] Falta la columna users.avatar: aplicar migrations/002_add_profile_to_users.sql');
+        }
+    }
+
+    return $exists;
+}
+
+/** ¿Existe la tabla user_follows? (migración 008; se consulta una vez por petición). */
+function apiHasFollowsTable(PDO $pdo): bool
+{
+    static $exists = null;
+
+    if ($exists === null) {
+        $exists = $pdo->query("SHOW TABLES LIKE 'user_follows'")->fetch() !== false;
+        if (!$exists) {
+            error_log('[API posts] Falta la tabla user_follows: aplicar migrations/008_add_follows_table.sql');
+        }
+    }
+
+    return $exists;
+}
+
+/**
+ * Agrega a cada post si es del usuario de la sesión (is_own) y si ese usuario YA SIGUE al autor (following).
+ * Usa 1 sola consulta para TODOS los autores juntos (no una por post). Los ids vienen de la base y van como parámetros.
+ */
+function apiAttachFollowing(PDO $pdo, array $posts): array
+{
+    $me        = is_authenticated() ? current_user()['id'] : null;
+    $following = [];
+
+    if ($posts && $me !== null && apiHasFollowsTable($pdo)) {
+        $authors = array_values(array_unique(array_column($posts, 'user_id')));
+        $marks   = implode(', ', array_fill(0, count($authors), '?'));
+
+        // De esos autores, a cuáles sigue el usuario de la sesión
+        $stmt = $pdo->prepare("SELECT following_id FROM user_follows WHERE follower_id = ? AND following_id IN ($marks)");
+        $stmt->execute(array_merge([$me], $authors));
+        $following = array_flip($stmt->fetchAll(PDO::FETCH_COLUMN));
+    }
+
+    return array_map(static function (array $post) use ($me, $following): array {
+        $post['is_own']    = $me !== null && $post['user_id'] === $me;
+        $post['following'] = !$post['is_own'] && isset($following[$post['user_id']]);   // nunca "sigue" a sí mismo
+        return $post;
+    }, $posts);
+}
+
+/** Lista de columnas de un post (constante: no incluye datos sensibles del usuario). */
 function apiPostColumns(PDO $pdo): string
 {
     $phone = apiHasColumn($pdo, 'phone') ? 'p.phone' : 'NULL AS phone';
     $media = apiHasColumn($pdo, 'media_path') ? 'p.media_type, p.media_path' : 'NULL AS media_type, NULL AS media_path';
     $deal  = apiHasColumn($pdo, 'price') && apiHasColumn($pdo, 'size') ? 'p.price, p.size' : 'NULL AS price, NULL AS size';
 
-    return "p.id, p.title, p.content, {$phone}, {$media}, {$deal}, p.created_at, p.updated_at, u.id AS user_id, u.name AS user_name";
+    // Foto de perfil del autor (ruta interna; apiShapePost la convierte en user_avatar). Sin la migración 002 → NULL.
+    $avatar = apiHasAvatarColumn($pdo) ? 'u.avatar AS user_avatar_path' : 'NULL AS user_avatar_path';
+
+    return "p.id, p.title, p.content, {$phone}, {$media}, {$deal}, p.created_at, p.updated_at, u.id AS user_id, u.name AS user_name, {$avatar}";
 }
 
 /** Forma pública de un post: la ruta interna del archivo se entrega como media_url (o null si no es válida). */
@@ -325,6 +390,11 @@ function apiShapePost(array $post): array
     $post['media_type'] = $ok ? $type : null;
     $post['media_url']  = $ok ? $url : null;
     unset($post['media_path']);
+
+    // Foto de perfil del autor: URL pública validada (o null). La ruta interna no sale de la API.
+    $avatarUrl = upload_url($post['user_avatar_path'] ?? null);
+    $post['user_avatar'] = $avatarUrl !== '' ? $avatarUrl : null;
+    unset($post['user_avatar_path']);
 
     return $post;
 }
@@ -341,7 +411,7 @@ function apiFindPost(PDO $pdo, string $id): ?array
     $stmt->execute(['id' => $id]);
     $post = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    return $post === false ? null : apiAttachLikes($pdo, [apiShapePost($post)])[0];
+    return $post === false ? null : apiAttachFollowing($pdo, apiAttachLikes($pdo, [apiShapePost($post)]))[0];
 }
 
 /* ===================== Controlador ===================== */
@@ -389,9 +459,11 @@ try {
                     );
                     $stmt->bindValue(':q', $like, PDO::PARAM_STR);
                     $stmt->execute();
-                    $found = apiAttachLikes($pdo, array_map('apiShapePost', $stmt->fetchAll(PDO::FETCH_ASSOC)));
+                    // [MERGE]: la búsqueda (base) también pasa por apiAttachFollowing (seguimiento), para que los posts
+                    // encontrados traigan user_avatar / is_own / following igual que el listado normal.
+                    $found = apiAttachFollowing($pdo, apiAttachLikes($pdo, array_map('apiShapePost', $stmt->fetchAll(PDO::FETCH_ASSOC))));
 
-                    header('Cache-Control: no-store');   // igual que el listado: "liked" depende de quién pide
+                    header('Cache-Control: no-store');   // igual que el listado: "liked" y "following" dependen de quién pide
                     apiResponse(200, [
                         'status' => 'success',
                         'count'  => count($found),
@@ -408,9 +480,9 @@ try {
                 ORDER BY p.created_at DESC
                 LIMIT ' . API_LIST_LIMIT . '
             ');
-            $posts = apiAttachLikes($pdo, array_map('apiShapePost', $stmt->fetchAll(PDO::FETCH_ASSOC)));
+            $posts = apiAttachFollowing($pdo, apiAttachLikes($pdo, array_map('apiShapePost', $stmt->fetchAll(PDO::FETCH_ASSOC))));
 
-            // "liked" depende de quién pide el listado: que ningún navegador ni proxy lo guarde en caché
+            // "liked" y "following" dependen de quién pide el listado: que ningún navegador ni proxy lo guarde en caché
             header('Cache-Control: no-store');
 
             apiResponse(200, [

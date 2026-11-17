@@ -55,16 +55,12 @@ try {
     abort_with(500, 'No pudimos cargar tu perfil. Intentá de nuevo más tarde.');
 }
 
-// Pestaña activa: solo 'videos' (lista blanca); cualquier otro valor muestra todas las publicaciones
-$tab = input_str($_GET, 'tab') === 'videos' ? 'videos' : 'all';
+// [AJUSTE 4] Se eliminó la pestaña "Videos" y su filtrado (antes se elegía con un parámetro en la URL).
+// El perfil tiene una única grilla, "Mis publicaciones", con TODAS las publicaciones del usuario
+// (fotos, videos y texto juntos).
 
-// Publicaciones con video: media_type = 'video' y ruta de archivo válida (misma regla con la que se dibuja la miniatura).
-// Cada miniatura de video enlaza a controllers/posts/show.php?id=<uuid>: la ruta que ya existía para abrir UN post
-// (exige sesión, valida el UUID y consulta con sentencia preparada); su vista muestra el video con controles.
-$videoPosts = array_values(array_filter($posts, function ($post) {
-    return ($post['media_type'] ?? '') === 'video' && upload_url($post['media_path'] ?? null) !== '';
-}));
-$shownPosts = $tab === 'videos' ? $videoPosts : $posts;
+// [AJUSTE 4] Se quitó el filtro de videos: la grilla recorre directamente todas las publicaciones ($posts).
+// Los videos se siguen mostrando con su miniatura, el icono de play y el link a controllers/posts/show.php.
 
 $notice    = flash_get('profile_notice');   // ['type' => 'ok'|'error', 'msg' => '...'] o null
 $avatarUrl = upload_url($user['avatar']);   // '' si no hay foto (o la ruta no es válida)
@@ -126,26 +122,22 @@ $maxProfile = upload_limit_bytes(UPLOAD_MAX_PROFILE_IMAGE);
         <button type="button" class="btn" id="open-edit">Editar fotos</button>
     </header>
 
+    <!-- [AJUSTE 4] Una única sección: "Mis publicaciones" (la pestaña "Videos" se eliminó). Se mantiene como enlace
+         activo para que se vea igual que antes, solo que ya no hay una segunda pestaña ni filtro por URL. -->
     <nav class="tabs" aria-label="Contenido del perfil">
-        <a class="tabs__item<?= $tab === 'all' ? ' tabs__item--active' : '' ?>" href="/src/views/profile/index.php"<?= $tab === 'all' ? ' aria-current="page"' : '' ?>>Mis publicaciones</a>
-        <a class="tabs__item<?= $tab === 'videos' ? ' tabs__item--active' : '' ?>" href="/src/views/profile/index.php?tab=videos"<?= $tab === 'videos' ? ' aria-current="page"' : '' ?>>Videos</a>
+        <a class="tabs__item tabs__item--active" href="/src/views/profile/index.php" aria-current="page">Mis publicaciones</a>
     </nav>
 
-    <?php if (!$shownPosts): ?>
-        <?php if ($tab === 'videos'): ?>
-            <section class="empty">
-                <h2>Todavía no subiste videos</h2>
-                <p>Cuando publiques un video, va a aparecer acá.</p>
-            </section>
-        <?php else: ?>
-            <section class="empty">
-                <h2>Subí tu primera pilcha</h2>
-                <p>Cuando publiques algo, va a aparecer acá.</p>
-            </section>
-        <?php endif; ?>
+    <?php if (!$posts): ?>
+        <!-- [AJUSTE 4] Estado vacío único (ya no existe el de "Todavía no subiste videos") -->
+        <section class="empty">
+            <h2>Subí tu primera pilcha</h2>
+            <p>Cuando publiques algo, va a aparecer acá.</p>
+        </section>
     <?php else: ?>
-        <section class="grid" aria-label="<?= $tab === 'videos' ? 'Mis videos' : 'Mis publicaciones' ?>">
-            <?php foreach ($shownPosts as $i => $post): ?>
+        <!-- [AJUSTE 4] Una sola grilla con TODAS las publicaciones (fotos y videos juntos), en PC, tablet y celular -->
+        <section class="grid" aria-label="Mis publicaciones">
+            <?php foreach ($posts as $i => $post): ?>
                 <?php $mediaUrl = upload_url($post['media_path'] ?? null); ?>
                 <article class="tile tile--<?= $i % 5 ?><?= $mediaUrl !== '' ? ' tile--media' : '' ?><?= $mediaUrl !== '' && ($post['media_type'] ?? '') === 'video' ? ' tile--video' : '' ?>">
                     <?php if ($mediaUrl !== '' && ($post['media_type'] ?? '') === 'image'): ?>

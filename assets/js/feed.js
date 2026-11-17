@@ -3,7 +3,8 @@
 // y navegación con teclado.
 //
 // API usada: GET /src/controllers/api/posts.php  ->  { status, count, data: [ {id, title, content, phone,
-//            media_type, media_url, created_at, updated_at, user_id, user_name} ] }
+//            media_type, media_url, created_at, updated_at, user_id, user_name,
+//            user_avatar (foto del autor o null), is_own, following (¿ya lo sigo?)} ] }
 //            phone: WhatsApp opcional, solo dígitos, o null.   media_type: 'image' | 'video' | null.
 //            media_url: ruta pública del archivo (/assets/img/uploads/<usuario>/post_<UUID>.<ext>) o null.
 //            price: precio como texto decimal ("15000.00"; null en publicaciones viejas).   size: talla o número ("M", "42").
@@ -16,7 +17,7 @@
 //            POST ?resource=likes     {post_id, liked}   -> { data: {post_id, liked, likes_count} }   (liked: true | false)
 //            Los POST llevan la cabecera X-CSRF-Token (de <meta name="csrf-token">, que solo existe con sesión).
 // SECCIONES NUEVAS (parte 2):
-//   - "Panel lateral"  : 📱 tablet y 🖥️ escritorio (≥ 768px). Columna derecha (#postPanel) con los detalles y los comentarios
+//   - "Panel lateral"  : 🖥️ solo PC (≥ 1200px; [AJUSTE 2] antes también tablet). Columna derecha (#postPanel) con los detalles y los comentarios
 //                        de la publicación visible. Usa la MISMA API de comentarios de siempre (no hay lógica nueva).
 //   - "Flechas ^ y v"  : 🖥️ escritorio y 📱 tablet. Botones #feedPrev / #feedNext que suben/bajan una publicación.
 //   - "Columna de acciones": 🖥️ escritorio y 📱 tablet. Los botones perfil / me gusta / comentar / guardar / WhatsApp viven
@@ -99,6 +100,11 @@
     return '$' + whole + (cents ? ',' + (cents < 10 ? '0' : '') + cents : '');
   }
 
+  // Solo se acepta una foto de perfil que venga de la carpeta de subidas del servidor (nunca una URL externa).
+  function safeAvatar(url) {
+    return typeof url === 'string' && url.indexOf('/assets/img/uploads/') === 0 ? url : '';
+  }
+
   function fromApi(p) {
     var media = apiMedia(p);
     return {
@@ -106,6 +112,10 @@
       kind: media ? media.kind : 'text',  // con foto o video se dibuja como las demás; sin adjunto, como tarjeta de texto
       src: media ? media.src : '',
       seller: String(p.user_name || ''),
+      sellerId: String(p.user_id || ''),                       // id del autor: abre su perfil y es el destino de "Seguir"
+      avatar: safeAvatar(p.user_avatar),                        // foto de perfil real del autor ('' = icono genérico)
+      isOwn: p.is_own === true,                                 // publicación mía: no se muestra "Seguir"
+      following: p.following === true,                          // ¿ya sigo al autor?
       title: String(p.title || ''),
       desc: String(p.content || ''),
       phone: p.phone ? String(p.phone) : '',
@@ -194,13 +204,20 @@
     var section = el('section', 'post');
     section.dataset.postId = p.id;
     section.dataset.seller = p.seller;
+    if (p.sellerId) { section.dataset.sellerId = p.sellerId; }   // para abrir el perfil del autor al tocar su nombre/avatar
     if (p.demo) { section.dataset.demo = '1'; }
     rememberLike(p.id, p.liked, p.likes);   // estado inicial que mandó el servidor (paintLike lo dibuja en finish())
 
     section.appendChild(buildMedia(p, isFirst));
 
     var info = el('div', 'post-info');
-    info.appendChild(el('div', 'post-seller', p.seller));
+    var seller = el('div', 'post-seller', p.seller);
+    if (p.sellerId) {                      // publicaciones reales: el nombre abre el perfil del autor (data-action="profile")
+      seller.dataset.action = 'profile';
+      seller.setAttribute('role', 'link');
+      seller.tabIndex = 0;
+    }
+    info.appendChild(seller);
     if (p.kind !== 'text') {
       if (p.title) { info.appendChild(el('p', 'post-desc post-headline', p.title)); }   // publicaciones reales: título + descripción
       info.appendChild(el('p', 'post-desc', p.desc));
@@ -221,12 +238,34 @@
 
     var actions = el('div', 'post-actions');
 
+    // Avatar del autor: foto real si la tiene (si no, o si no carga, el icono genérico) + insignia roja "+" para seguirlo.
+    // La insignia es un botón HERMANO del avatar (no hijo: un botón dentro de otro botón no es HTML válido);
+    // assets/js/follow.js se encarga del toque. No se muestra en publicaciones propias, de demostración ni a quien ya lo sigue.
+    var avatarWrap = el('div', 'post-avatar-wrap');
     var avatar = el('button', 'post-avatar');
     avatar.type = 'button';
     avatar.dataset.action = 'profile';
     avatar.setAttribute('aria-label', 'Ver perfil de ' + p.seller);
-    avatar.appendChild(icon('i-user'));
-    actions.appendChild(avatar);
+    if (p.avatar) {
+      var photo = el('img');
+      photo.src = p.avatar;
+      photo.alt = '';
+      photo.decoding = 'async';
+      photo.addEventListener('error', function () {   // foto rota o borrada: vuelve el icono por defecto
+        avatar.textContent = '';
+        avatar.appendChild(icon('i-user'));
+      });
+      avatar.appendChild(photo);
+    } else {
+      avatar.appendChild(icon('i-user'));
+    }
+    avatarWrap.appendChild(avatar);
+    if (p.sellerId && !p.isOwn && window.PilchakFollow) {
+      avatarWrap.appendChild(window.PilchakFollow.createButton({
+        userId: p.sellerId, userName: p.seller, following: p.following, variant: 'badge'
+      }));
+    }
+    actions.appendChild(avatarWrap);
 
     var like = el('button', 'action-btn action-like');
     like.type = 'button';
@@ -569,13 +608,16 @@
     });
   }
 
-  // ---------- Panel lateral: detalles + comentarios (📱 tablet y 🖥️ escritorio, ≥ 768px) ----------
+  // ---------- Panel lateral: detalles + comentarios (🖥️ solo PC, ≥ 1200px) ----------
   // Qué hace: cuando cambia la publicación visible, muestra en la columna derecha (#postPanel) el vendedor, la fecha,
   // el título, la descripción, el precio, la talla, el botón "Chatea con el vendedor" y sus comentarios.
   // Qué NO hace: no agrega likes, seguir ni respuestas a comentarios. Lee y publica comentarios con la API existente.
   // En 📱 celular el panel está oculto por CSS, así que no se piden comentarios (se usa el modal de siempre).
   var panel = document.getElementById('postPanel');
-  var PANEL_MQ = window.matchMedia('(min-width: 768px)');   // mismo corte que landing.css (tablet y escritorio)
+  // [AJUSTE 2] El panel lateral ahora SOLO se muestra en 🖥️ PC (≥ 1200px), igual que en landing.css. En 📱 tablet y
+  // 📱 celular está oculto, así que no se piden comentarios para el panel y el botón "Comentar" abre el modal.
+  // (Antes el corte era 768px y la tablet también mostraba el panel.)
+  var PANEL_MQ = window.matchMedia('(min-width: 1200px)');
   var panelEls = panel ? {
     seller: document.getElementById('panelSeller'),
     date: document.getElementById('panelDate'),
@@ -847,8 +889,16 @@
     } else if (action === 'save') {
       toggleSave(post);
     } else if (action === 'profile') {
-      notify('Perfil de ' + post.dataset.seller + ': próximamente');
+      // [MERGE]: seguimiento. Publicación real → perfil público del autor (o el propio, si es mío); las de
+      // demostración no tienen usuario y conservan el aviso original de la base.
+      if (post.dataset.sellerId) { openProfile(post.dataset.sellerId); }
+      else { notify('Perfil de ' + post.dataset.seller + ': próximamente'); }
     }
+  }
+
+  // [MERGE]: abre el perfil de un usuario (profile/index.php?id=<uuid>; si el id es el mío muestra mi perfil)
+  function openProfile(userId) {
+    window.location.href = '/src/views/profile/index.php?id=' + encodeURIComponent(userId);
   }
 
   feed.addEventListener('click', function (ev) {
@@ -866,6 +916,7 @@
   //   2) Un clic en la columna ejecuta la misma acción (runAction) sobre la publicación visible (currentPost).
   // Los botones que están dentro de cada publicación siguen existiendo (los usa el celular); en ≥ 768px el CSS los oculta.
   var rail = document.getElementById('railActions');
+  var panelActs = document.getElementById('panelActions');   // [AJUSTE 1] botones Me gusta / Guardar del panel derecho (solo PC)
 
   // Copia el estado visual de un botón al otro: clase is-active, atributos ARIA y el texto (contador / "Guardado")
   function copyButtonState(from, to) {
@@ -880,11 +931,85 @@
     if (fromLabel && toLabel) { toLabel.textContent = fromLabel.textContent; }
   }
 
+  // [MERGE] Seguimiento (assets/js/follow.js + follow.css).
+  //   - 📱 celular y tablet (< 1200px): cada publicación dibuja su propio avatar con la foto real y la insignia roja "+"
+  //     (ver buildPost); la columna #railActions está oculta por CSS en esos tamaños, así que no hace falta tocarla.
+  //   - 🖥️ PC (≥ 1200px): el panel derecho (#postPanel) es UN solo bloque que muestra la publicación visible, y acá se
+  //     mantiene al día: foto real del vendedor, botón "Seguir"/"Siguiendo" (#panelFollow) junto a su nombre, y
+  //     avatar + nombre como enlace a su perfil.
+  // El botón del panel se "apunta" al vendedor visible con PilchakFollow.retarget; el estado lo reparte follow.js.
+  var panelAvatar   = document.getElementById('panelAvatar');
+  var panelFollow   = document.getElementById('panelFollow');
+  var panelFollowBtn = null;        // botón "Seguir" del panel: se crea la primera vez que hace falta
+
+  // Muestra la foto del vendedor dentro de un círculo (o vuelve al icono si no hay foto / no carga)
+  function paintAvatar(holder, url) {
+    if (!holder) { return; }
+    var icon = holder.querySelector('.feed-icon');
+    var img = holder.querySelector('img.avatar-photo');
+    if (url) {
+      if (!img) {
+        img = el('img', 'avatar-photo');
+        img.alt = '';
+        img.decoding = 'async';
+        img.addEventListener('error', function () {            // foto rota o borrada: vuelve el icono
+          img.style.display = 'none';
+          if (icon) { icon.style.display = ''; }
+        });
+        holder.appendChild(img);
+      }
+      if (img.getAttribute('src') !== url) { img.src = url; }
+      img.style.display = '';
+      if (icon) { icon.style.display = 'none'; }
+    } else {
+      if (img) { img.style.display = 'none'; }
+      if (icon) { icon.style.display = ''; }
+    }
+  }
+
+  function syncSeller(post) {
+    var p = postData[post.dataset.postId];
+    var real = !!(p && p.sellerId);                              // las de demostración no tienen usuario
+    var canFollow = real && !p.isOwn && !!window.PilchakFollow;
+    var who = { userId: real ? p.sellerId : '', userName: real ? p.seller : '', following: real && p.following };
+
+    paintAvatar(panelAvatar, real ? p.avatar : '');
+
+    if (panelFollow) {
+      if (canFollow) {
+        if (!panelFollowBtn) {
+          panelFollowBtn = window.PilchakFollow.createButton({ userId: who.userId, userName: who.userName, following: who.following, variant: 'pill' });
+          panelFollow.appendChild(panelFollowBtn);
+        } else {
+          window.PilchakFollow.retarget(panelFollowBtn, who);
+        }
+      }
+      panelFollow.hidden = !canFollow;
+    }
+    // Avatar y nombre del panel: enlace al perfil mientras haya usuario real
+    [panelAvatar, panelEls && panelEls.seller].forEach(function (node) {
+      if (!node) { return; }
+      if (real) { node.dataset.profile = '1'; } else { delete node.dataset.profile; }
+    });
+    if (panelEls && panelEls.seller) {
+      if (real) { panelEls.seller.setAttribute('role', 'link'); panelEls.seller.tabIndex = 0; }
+      else { panelEls.seller.removeAttribute('role'); panelEls.seller.removeAttribute('tabindex'); }
+    }
+  }
+
   function syncRail(post) {
     if (!rail || !post) { return; }
     copyButtonState(post.querySelector('.action-like'), rail.querySelector('.action-like'));
     copyButtonState(post.querySelector('.action-save'), rail.querySelector('.action-save'));
     rail.querySelector('.post-avatar').setAttribute('aria-label', 'Ver perfil de ' + post.dataset.seller);
+    syncSeller(post);   // [MERGE] foto real + botón "Seguir" + enlace al perfil en el panel derecho (PC)
+
+    // [AJUSTE 1 · PC] Mismo estado en los botones "Me gusta" (con contador) y "Guardar" del panel derecho (#panelActions).
+    // copyButtonState copia is-active, aria-pressed, aria-label y el texto (contador / "Guardado"): no hay lógica nueva.
+    if (panelActs) {
+      copyButtonState(post.querySelector('.action-like'), panelActs.querySelector('.action-like'));
+      copyButtonState(post.querySelector('.action-save'), panelActs.querySelector('.action-save'));
+    }
 
     var source = post.querySelector('.action-wsp');          // la publicación solo tiene botón si hay un número válido
     var wsp = rail.querySelector('.action-wsp');
@@ -898,12 +1023,47 @@
     rail.classList.add('is-ready');                           // hasta la primera sincronización la columna está invisible
   }
 
+  // [MERGE] Clic (o Enter) en el avatar o el nombre del vendedor del panel derecho → perfil del vendedor visible
+  var panelHead = document.querySelector('#postPanel .panel-seller');
+  if (panelHead) {
+    panelHead.addEventListener('click', function (ev) {
+      if (ev.target.closest('[data-follow-btn]')) { return; }          // el botón "Seguir" no abre el perfil
+      var link = ev.target.closest('[data-profile]');
+      if (link && currentPost && currentPost.dataset.sellerId) { openProfile(currentPost.dataset.sellerId); }
+    });
+    panelHead.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Enter' && ev.key !== ' ') { return; }
+      var link = ev.target.closest('[data-profile]');
+      if (!link) { return; }
+      ev.preventDefault();
+      if (currentPost && currentPost.dataset.sellerId) { openProfile(currentPost.dataset.sellerId); }
+    });
+  }
+
   if (rail) {
     rail.addEventListener('click', function (ev) {
       var btn = ev.target.closest('[data-action]');
       if (btn && currentPost) { runAction(btn.dataset.action, currentPost); }
     });
   }
+
+  // [AJUSTE 1 · PC] Un clic en "Me gusta" o "Guardar" del panel hace lo mismo que en la columna lateral y en el celular:
+  // runAction('like' | 'save', publicación visible). Después paintLike / paintSave repintan y syncRail actualiza el panel.
+  if (panelActs) {
+    panelActs.addEventListener('click', function (ev) {
+      var btn = ev.target.closest('[data-action]');
+      if (btn && currentPost) { runAction(btn.dataset.action, currentPost); }
+    });
+  }
+
+  // Enter / espacio sobre el nombre del vendedor (role="link") hace lo mismo que el clic
+  feed.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Enter' && ev.key !== ' ') { return; }
+    var name = ev.target.closest('.post-seller[data-action="profile"]');
+    if (!name) { return; }
+    ev.preventDefault();
+    name.click();
+  });
 
   feed.addEventListener('dblclick', function (ev) {
     if (ev.target.closest('a, button')) { return; }   // doble clic sobre un botón no es "doble toque"

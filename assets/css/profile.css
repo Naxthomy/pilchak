@@ -21,6 +21,8 @@
     --glass-hi: rgba(255, 255, 255, .06);
     --cover: #1a2145;
     --app-max: 500px;
+    /* [BARRA INFERIOR] Altura aproximada de la barra inferior (igual que --nav-bottom del feed en landing.css) */
+    --nav-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
     --font-mono: ui-monospace, "JetBrains Mono", "Roboto Mono", SFMono-Regular, Menlo, Consolas, monospace;
 }
 
@@ -39,6 +41,9 @@ body {
     background-attachment: fixed;
 }
 
+/* [BARRA INFERIOR] La página no se desplaza: el scroll vive dentro del marco (.profile), igual que en el feed */
+body.profile-page { overflow: hidden; overscroll-behavior: none; }
+
 /* Destellos desenfocados detrás del contenido */
 body::before {
     content: "";
@@ -54,29 +59,43 @@ body::before {
         radial-gradient(circle at 80% 80%, rgba(110, 130, 230, .12) 0 30px, transparent 100px);
 }
 
-/* Tarjeta principal (glass), centrada y flotante en escritorio */
+/* [BARRA INFERIOR] Marco móvil: copia de .app-frame del feed (landing.css). Celular: pantalla completa.
+   Escritorio y tablet (> 560px): tarjeta flotante centrada, con el mismo borde, esquinas y sombra que el feed. */
+.app-frame {
+    position: relative;
+    width: 100%;
+    max-width: var(--app-max);
+    height: 100vh;
+    height: 100dvh;
+    margin: 0 auto;
+    overflow: hidden;
+    background: #05070d;
+}
+@media (min-width: 561px) {
+    .app-frame {
+        height: calc(100vh - 48px);
+        height: calc(100dvh - 48px);
+        margin: 24px auto;
+        border: 1px solid rgba(205, 215, 235, .22);
+        border-radius: 30px;
+        box-shadow: 0 0 0 6px rgba(14, 19, 31, .55), 0 30px 80px rgba(0, 0, 0, .6), 0 0 60px rgba(90, 120, 220, .08);
+    }
+}
+
+/* Contenido del perfil: ocupa todo el marco y se desplaza por dentro (la barra inferior queda fija encima).
+   El padding-bottom reserva el lugar de la barra para que no tape la última fila de publicaciones. */
 .profile {
     position: relative;
-    max-width: var(--app-max);
-    margin: 24px auto;
-    overflow: hidden;
+    height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
     background:
         linear-gradient(145deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .01)),
         var(--glass);
-    -webkit-backdrop-filter: blur(16px) saturate(120%);
-    backdrop-filter: blur(16px) saturate(120%);
-    border: 1px solid rgba(205, 215, 235, .22);
-    border-radius: 30px;
-    box-shadow:
-        0 0 0 6px rgba(14, 19, 31, .55),
-        0 30px 80px rgba(0, 0, 0, .6),
-        0 0 60px rgba(90, 120, 220, .08);
-    /* En escritorio la tarjeta ocupa el alto de la ventana: así la barra inferior (fija) queda pegada a su borde.
-       El padding-bottom reserva el lugar de la barra para que no tape la última fila de publicaciones. */
-    min-height: calc(100vh - 48px);
-    min-height: calc(100dvh - 48px);
-    padding-bottom: 96px;
+    padding-bottom: calc(var(--nav-bottom) + 16px);
 }
+.profile::-webkit-scrollbar { width: 0; }
 
 /* Cabecera */
 .profile__head { text-align: center; padding-bottom: 18px; }
@@ -228,7 +247,7 @@ body::before {
 /* ---- Integración con Pilchak ---- */
 
 /* Barra superior: marca + cerrar sesión */
-.profile__bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 16px; }
+.profile__bar { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 12px 16px; }
 .profile__brand { font-weight: 700; letter-spacing: .3em; font-size: .95rem; color: var(--text); user-select: none; }
 .profile__bar form { margin: 0; }
 .profile__bar .btn { display: inline-block; }
@@ -325,6 +344,95 @@ body::before {
     box-shadow: 0 0 8px rgba(154, 167, 255, .55);
 }
 
+/* ---- [BARRA INFERIOR] Barra Inicio · Publicar (+) · Perfil: MISMOS estilos que .feed-nav-bottom del feed ----
+   Copiados de landing.css (.feed-nav, .feed-nav-bottom, .feed-nav-btn, .feed-nav-publish, .feed-icon) y de
+   styles.css (estado activo). Esta página no carga esos archivos, por eso se repiten acá. Si cambiás la barra del
+   feed, cambiá también este bloque para que sigan iguales. */
+.feed-icon {
+    display: block;
+    width: 26px;
+    height: 26px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+.feed-nav {
+    position: absolute;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    pointer-events: none;   /* la barra no recibe toques (no bloquea el scroll); solo sus botones */
+}
+.feed-nav > * { pointer-events: auto; }
+.feed-nav-bottom {
+    bottom: 0;
+    padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+    background: rgba(5, 8, 14, .82);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    border-top: 1px solid rgba(205, 215, 235, .10);
+}
+.feed-nav-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 18px;
+    border: 0;
+    background: none;
+    color: rgba(255, 255, 255, .68);
+    cursor: pointer;
+    text-decoration: none;
+    transition: color .2s ease;
+}
+.feed-nav-btn:hover,
+.feed-nav-btn:focus { color: #fff; text-decoration: none; }
+.feed-nav-btn:focus-visible { outline: 2px solid rgba(154, 167, 255, .8); outline-offset: 2px; border-radius: 10px; }
+
+/* Botones de sección (Inicio y Perfil): círculo de 46px, transparente cuando NO están activos */
+.feed-nav-bottom .feed-nav-btn:not(.feed-nav-publish) {
+    position: relative;
+    width: 46px;
+    height: 46px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid transparent;
+}
+/* Sección ACTIVA: círculo oscuro con borde fino + barrita de acento debajo */
+.feed-nav-bottom .feed-nav-btn.is-active {
+    color: #fff;
+    background: #02040a;
+    border-color: rgba(205, 215, 235, .22);
+    box-shadow: inset 0 0 12px rgba(0, 0, 0, .7);
+}
+.feed-nav-bottom .feed-nav-btn.is-active::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -5px;
+    width: 18px;
+    height: 3px;
+    transform: translateX(-50%);
+    border-radius: 3px;
+    background: #9aa7ff;
+    box-shadow: 0 0 8px rgba(154, 167, 255, .55);
+}
+/* Botón central "publicar": rectángulo claro con un + */
+.feed-nav-publish {
+    padding: 4px 18px;
+    border-radius: 10px;
+    background: #f4f6fb;
+    color: #05070d;
+    box-shadow: 0 0 18px rgba(200, 215, 255, .14);
+}
+.feed-nav-publish:hover,
+.feed-nav-publish:focus { color: #000; background: #fff; }
+.feed-nav-publish .feed-icon { stroke-width: 2.5; }
+
 /* ---- Responsive ---- */
 
 /* 📱 TABLET (≥ 768px): tarjeta y barra inferior más anchas (mismo ancho entre sí para que se vean como una sola pieza) */
@@ -333,21 +441,10 @@ body::before {
     .profile__cover { height: 190px; }          /* portada algo más alta */
 }
 
-/* 📱 CELULAR (≤ 560px): la tarjeta ocupa toda la pantalla, igual que el feed */
+/* 📱 CELULAR (≤ 560px): el marco (.app-frame) ya ocupa toda la pantalla y la barra inferior va de borde a borde.
+   Solo se deja lugar arriba para el notch. */
 @media (max-width: 560px) {
-    .profile {
-        max-width: none;
-        min-height: 100vh;
-        min-height: 100dvh;
-        margin: 0;
-        border: 0;
-        border-radius: 0;
-        box-shadow: none;
-        padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));   /* lugar para la barra inferior */
-    }
     .profile__bar { padding-top: calc(12px + env(safe-area-inset-top, 0px)); }
-    /* La barra inferior ocupa todo el ancho, pegada al borde de la pantalla */
-    .bottom-nav { bottom: 0; width: 100%; border-width: 1px 0 0; border-radius: 0; }
 }
 
 /* Pantallas muy angostas */

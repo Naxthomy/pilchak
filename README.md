@@ -43,7 +43,7 @@ Incluye:
 │   ├── img/                logo e imágenes fijas
 │   │   └── uploads/        Archivos subidos por los usuarios (con su propio .htaccess; no se versionan)
 │   └── js/                 landing.js, feed.js, publish.js (+ Bootstrap)
-├── migrations/             Scripts SQL incrementales para bases de datos ya existentes (001 a 007)
+├── migrations/             Scripts SQL incrementales para bases de datos ya existentes (001 a 008)
 ├── src/
 │   ├── config/             session.php, bootstrap.php, database.php
 │   ├── controllers/
@@ -103,6 +103,7 @@ mysql -u TU_USUARIO -p < schema.sql
 | `003_add_media_to_posts.sql` | `posts.media_type`, `posts.media_path` (imagen o video) | La API rechaza posts con archivo (500 con mensaje claro). |
 | `004_add_comments_table.sql` | Tabla `comments` (solo esquema) | Nada: ningún código la usa todavía. Se puede aplicar cuando se implemente la funcionalidad. |
 | `007_add_price_size_to_posts.sql` | `posts.price` (precio) y `posts.size` (talla o número). Obligatorios al publicar; en la base admiten NULL para no romper las publicaciones viejas. | El feed funciona sin precio ni talla; crear una publicación responde 500 con un mensaje claro. |
+| `008_add_follows_table.sql` | Tabla `user_follows` (follower_id, following_id, created_at): quién sigue a quién ("Seguir" / "Siguiendo"). Los contadores se calculan con COUNT. | El feed y el perfil funcionan sin ella (0 seguidores, sin botón activo); la API `follows.php` responde 500 con un mensaje claro. |
 | `006_add_post_likes_table.sql` | Tabla `post_likes` (me gusta: un usuario, una publicación) | El feed funciona con todos los totales en 0; dar me gusta responde 500 (falta la tabla). |
 
 Ninguna migración borra ni modifica datos. Las imágenes de las publicaciones **no** necesitan una tabla aparte: la base guarda solo `media_type` y `media_path`, y el archivo vive en disco.
@@ -511,3 +512,8 @@ La batería `tests/ui/test_ui.py` quedó desactualizada con el rediseño visual 
 
 - El flujo está pensado para que primero se entienda la separación entre vista, controlador y configuración.
 - Los datos sensibles se guardan en `.env`, nunca en el repositorio.
+
+
+## Seguimiento entre usuarios ("Seguir")
+
+Requiere la migración 008. API: `src/controllers/api/follows.php` (GET estado/contadores y listas `list=following|followers`; POST con CSRF para seguir/dejar de seguir, toggle o idempotente con `following: true|false`). `posts.php` agrega a cada post `user_avatar`, `is_own` y `following`. Cliente: `assets/js/follow.js` + `assets/css/follow.css`. Perfil público: `src/views/profile/index.php?id=<uuid>`.

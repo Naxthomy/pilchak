@@ -855,6 +855,30 @@
   .panel-deal { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
   .panel-price { font-size: 1.3rem; font-weight: 800; color: #fff; }
   .panel-deal .post-size { margin-left: 0; }
+
+  /* [AJUSTE 1 · 🖥️ escritorio] "Me gusta" (con contador) y "Guardar" del panel: pastillas de vidrio con el mismo borde,
+     radio y color de texto que la talla (.post-size) y el resto de la tarjeta. Van a la derecha de la fila precio/talla;
+     si la tarjeta es angosta y no entran, pasan a la línea de abajo (la fila tiene flex-wrap). */
+  .panel-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+  .panel-act {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .06);
+    color: #e8edf8;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    transition: border-color .2s ease, background-color .2s ease;
+  }
+  .panel-act:hover, .panel-act:focus-visible { background: rgba(255, 255, 255, .11); border-color: var(--line-strong); }
+  .panel-act:focus-visible { outline: 2px solid rgba(154, 167, 255, .7); outline-offset: 2px; }
+  .panel-act .feed-icon { width: 18px; height: 18px; }   /* el color activo (corazón rojo / marcador dorado) viene de .action-like.is-active / .action-save.is-active */
+  .panel-act.is-active { border-color: rgba(255, 255, 255, .28); }
   
   /* Botón "Chatea con el vendedor": vidrio con verde apagado (no compite con el resto de la interfaz) */
   .btn-chat {
@@ -886,34 +910,34 @@
      ===================================================================== */
   
   /* ---------------------------------------------------------------------
-     📱 TABLET + 🖥️ ESCRITORIO (≥ 768px)
-     La foto/video (o la tarjeta de texto) ocupa TODO el marco del celular: ya no se reserva una franja a la
-     derecha para los botones, porque ahora viven en la columna lateral .stage-rail (afuera del marco).
-     Por eso los botones que están dentro de cada publicación (.post-actions) se ocultan acá; en 📱 celular
-     (< 768px) siguen siendo los que se usan, encima de la foto.
+     🖥️ SOLO ESCRITORIO / PC (≥ 1200px)   [AJUSTE 1]
+     En PC el detalle de la publicación ya se ve en la columna derecha (.side-right), así que se OCULTAN los datos que
+     iban encima de la foto/video y la barra vertical de iconos de la derecha:
+       1) .post-info      → usuario, título, descripción, precio, talle y fecha, abajo a la izquierda del post.
+       2) .rail-actions   → avatar, me gusta, comentar, guardar y WhatsApp, pegados al borde derecho del post.
+          (Las flechas ^ y v de .feed-arrows NO se tocan: siguen visibles.)
+       3) .post-actions   → los mismos botones, pero los que van dentro de cada post (ya estaban ocultos en PC).
+     En 📱 tablet y 📱 celular (< 1200px) NADA de esto se oculta: ahí se ven igual que en el celular.
      --------------------------------------------------------------------- */
-  @media (min-width: 768px) {
-    .post-actions { display: none; }
-    /* La info del vendedor ya no necesita dejar lugar a los botones (el margen de 84px es para el celular) */
-    .post-info { right: 16px; }
-    .post-text { padding-right: 24px; }
+  @media (min-width: 1200px) {
+    .post-info { display: none; }          /* datos superpuestos sobre la foto/video (solo PC) */
+    .rail-actions { display: none; }       /* barra vertical de iconos de interacción (solo PC) */
+    .post-actions { display: none; }       /* botones dentro del post (solo PC; en PC ya estaban ocultos) */
+    .post-text { padding-right: 24px; }    /* sin botones encima, la tarjeta de texto no necesita el hueco de la derecha */
+
+    /* La barra inferior (Inicio · + · Perfil) vive DENTRO de .app-frame y tiene que verse completa en PC.
+       Dentro de .phone el marco no debe sumar el margen de 24px de arriba (se usa en celulares/tablets, donde el marco
+       sí es una tarjeta flotante): con ese margen el borde de abajo quedaba recortado por .phone (overflow: hidden). */
+    .phone > .app-frame { height: 100%; margin: 0; }
   }
 
   /* ---------------------------------------------------------------------
-     📱 TABLET (768px – 1199px, p. ej. iPad Mini 768×1024 e iPad Pro 13" 1032×1376)
-     Se OCULTAN las tarjetas de la izquierda (Pilchak, Información, Cafecito, Redes) para no saturar la pantalla.
-     Quedan: feed (con su columna de acciones/flechas) + columna derecha de detalles/comentarios.
-     Sin hueco a la izquierda del celular (--rail-left: 0): en pantallas angostas cada píxel cuenta.
+     📱 TABLET (768px – 1199px, p. ej. iPad Mini e iPad Pro 13")   [AJUSTE 2]
+     Antes la tablet tenía su propio layout (feed + columna de detalles/comentarios). Ahora se comporta IGUAL que el
+     celular: se ocultan las columnas laterales y queda ÚNICAMENTE el feed central. Eso lo hace el bloque
+     "📱 CELULAR Y TABLET (< 1200px)" de más abajo (el corte pasó de 768px a 1200px). Por eso este bloque
+     (que fijaba --col-right: 320px y la grilla de 2 columnas) ya no tiene reglas.
      --------------------------------------------------------------------- */
-  @media (min-width: 768px) and (max-width: 1199.98px) {
-    :root { --col-left: 0px; --col-right: 320px; --rail-left: 0px; }   /* el feed se calcula con el ancho que queda */
-    .app-shell {
-      grid-template-columns: minmax(0, 1fr) var(--col-right);
-      grid-template-areas: "stage right";
-    }
-    .side-left { display: none; }                 /* sin tarjetas institucionales en tablet */
-    .side-right { padding-left: 4px; padding-right: 12px; }
-  }
 
   /* ---------------------------------------------------------------------
      🖥️ ESCRITORIO (≥ 1200px)
@@ -984,10 +1008,14 @@
   }
   
   /* ---------------------------------------------------------------------
-     📱 CELULAR (< 768px)
-     Sin columnas laterales ni flechas: el feed ocupa el 100% del ancho y del alto de la pantalla.
+     📱 CELULAR Y 📱 TABLET (< 1200px)   [AJUSTE 2: antes el corte era < 768px y solo cubría celulares]
+     Sin columnas laterales ni flechas: se ocultan la columna izquierda (tarjetas / información del proyecto) y la
+     derecha (detalles y comentarios fijos), y queda ÚNICAMENTE el feed central. Se siguen viendo, dentro del feed:
+       - los datos superpuestos abajo del post (.post-info),
+       - la barra vertical de iconos a la derecha (.post-actions), incluido el botón de comentarios (abre el modal),
+       - la barra inferior de navegación rápida (Inicio · + · Perfil).
      --------------------------------------------------------------------- */
-  @media (max-width: 767.98px) {
+  @media (max-width: 1199.98px) {
     /* Contenedor general: una sola columna a pantalla completa */
     .app-shell { display: block; height: 100vh; height: 100dvh; padding: 0; }
     .stage { display: block; width: 100%; height: 100%; }
@@ -1041,19 +1069,15 @@
     .feed-donate-mini span { display: none; }      /* feed angosto: solo la taza */
   }
   
-  /* Con texto "Colaborar" junto a la taza: celulares grandes (420px – 767px) y tablets cuyo feed ya es ancho (≥ 1000px) */
-  @media (min-width: 420px) and (max-width: 767.98px), (min-width: 1000px) and (max-width: 1199.98px) {
+  /* Con texto "Colaborar" junto a la taza: celulares grandes y tablets (420px – 1199px). [AJUSTE 2] En tablet el feed
+     ahora mide lo mismo que en un celular grande (marco de hasta 500px), por eso alcanza el mismo criterio. */
+  @media (min-width: 420px) and (max-width: 1199.98px) {
     .feed-donate-mini span { display: inline; }
   }
   
-  /* 📱 Tablets chicas (768px – 999px, p. ej. iPad Mini en vertical): el feed mide ~320px de ancho; el botón de acceso
-     se achica (igual que en celulares muy angostos) para que entren la lupa, Cafecito y "Registrate o iniciá sesión" */
-  @media (min-width: 768px) and (max-width: 999.98px) {
-    .btn-feed-login { font-size: .78rem; padding: .35rem .7rem; }
-    .feed-nav-top .feed-nav-btn { padding: 6px 10px; }
-    .feed-nav-top { gap: 6px; padding-left: 10px; padding-right: 10px; }
-  }
-  
+  /* (Se quitó el ajuste "tablets chicas 768px – 999px": existía porque el feed medía ~320px en tablet; ahora la tablet usa
+     el mismo marco que el celular y no hace falta achicar el botón de acceso.)   [AJUSTE 2] */
+
   /* 📱 Celulares muy angostos (< 360px): el botón de acceso se achica en vez de desbordar */
   @media (max-width: 359px) {
     .btn-feed-login { font-size: .78rem; padding: .35rem .7rem; }

@@ -57,9 +57,13 @@ $demoJson = json_encode($demoPosts, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS 
   <link rel="stylesheet" href="/assets/css/bootstrap.min.css">
   <link rel="stylesheet" href="/assets/css/styles.css">
   <link rel="stylesheet" href="/assets/css/landing.css">
+  <!-- Estilos de "Seguir": insignia roja "+" sobre el avatar y botón de seguir (archivo nuevo) -->
+  <link rel="stylesheet" href="/assets/css/follow.css">
   <!-- Orden importante: bootstrap (modales) → landing (overlay, barras, popup) → feed → publish -->
   <script src="/assets/js/bootstrap.min.js" defer></script>
   <script src="/assets/js/landing.js" defer></script>
+  <!-- follow.js ANTES de feed.js: feed.js usa window.PilchakFollow para dibujar la insignia "+" -->
+  <script src="/assets/js/follow.js" defer></script>
   <script src="/assets/js/feed.js" defer></script>
   <?php if ($isAuth): ?>
   <script src="/assets/js/publish.js" defer></script>
@@ -205,6 +209,10 @@ $demoJson = json_encode($demoPosts, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS 
     <?php endif; ?>
   </nav>
 
+  </div><!-- /.app-frame -->
+  <!-- [AJUSTE 3] Cierre que faltaba: .app-frame (abierto arriba) se cerraba recién al final del archivo, y el comentario
+       "/.phone" cerraba en realidad a .app-frame. Resultado: la columna de acciones/flechas y las dos columnas laterales
+       quedaban DENTRO de .phone / .stage y el layout se rompía. Con este cierre cada bloque vuelve a su lugar. -->
   </div><!-- /.phone -->
 
   <!-- ===== BUSCADOR POR TÍTULO (nuevo) =====
@@ -325,17 +333,33 @@ $demoJson = json_encode($demoPosts, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS 
     <!-- Tarjeta de detalles: vendedor, fecha, título, descripción, precio, talla y botón de WhatsApp -->
     <section class="glass-card panel-details" aria-live="polite">
       <header class="panel-seller">
-        <span class="panel-avatar" aria-hidden="true"><svg class="feed-icon"><use href="#i-user"/></svg></span>
+        <!-- [MERGE]: seguimiento. feed.js (syncSeller) pone la foto real en .panel-avatar, convierte avatar y nombre en
+             enlace al perfil (data-profile) y coloca el botón "Seguir"/"Siguiendo" dentro de #panelFollow, al lado del nombre. -->
+        <span class="panel-avatar" id="panelAvatar" aria-hidden="true"><svg class="feed-icon"><use href="#i-user"/></svg></span>
         <div class="panel-seller-text">
           <p class="panel-seller-name" id="panelSeller">Pilchak</p>
           <p class="panel-date" id="panelDate"></p>
         </div>
+        <span class="panel-follow" id="panelFollow" hidden></span>
       </header>
       <h2 class="panel-title" id="panelTitle">Cargando publicaciones…</h2>
       <p class="panel-desc" id="panelDesc"></p>
       <div class="panel-deal">
         <span class="panel-price" id="panelPrice" hidden></span>
         <span class="post-size" id="panelSize" hidden></span>
+        <!-- [AJUSTE 1 · escritorio] "Me gusta" (con el número de likes) y "Guardar" de la publicación visible.
+             No tienen lógica propia: feed.js (syncRail) copia a estos botones el estado de los de la publicación
+             (corazón/marcador activos, contador, "Guardado") y un clic ejecuta la MISMA acción que ya existía
+             (runAction → setLike / toggleSave). Las clases action-like / action-save reutilizan el color activo
+             de siempre; el aspecto de "pastilla" sale de .panel-act (landing.css). -->
+        <div class="panel-actions" id="panelActions" role="group" aria-label="Me gusta y guardar">
+          <button type="button" class="panel-act action-like" data-action="like" aria-pressed="false" aria-label="Me gusta">
+            <svg class="feed-icon" aria-hidden="true"><use href="#i-heart"/></svg><span class="action-label">0</span>
+          </button>
+          <button type="button" class="panel-act action-save" data-action="save" aria-pressed="false" aria-label="Guardar publicación">
+            <svg class="feed-icon" aria-hidden="true"><use href="#i-bookmark"/></svg><span class="action-label">Guardar</span>
+          </button>
+        </div>
       </div>
       <!-- Botón de contacto: feed.js le pone el link de WhatsApp de la publicación (o el número general) -->
       <a class="btn-chat" id="panelChat" href="#" target="_blank" rel="noopener noreferrer" hidden>
@@ -371,7 +395,7 @@ $demoJson = json_encode($demoPosts, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS 
   </aside>
 
   </div><!-- /.app-shell -->
-  </div><!-- /.app-frame -->
+  <!-- (el cierre de .app-frame que estaba acá se movió arriba, junto al de .phone) -->
 
   <!-- Aviso temporal (confirmaciones y "próximamente") -->
   <div class="feed-toast" id="feedToast" role="status" aria-live="polite"></div>

@@ -1,0 +1,175 @@
+/* =====================================================================
+   Pilchak · follow.css — sistema de seguimiento ("Seguir" / "Siguiendo")
+   Archivo NUEVO: no modifica ningún estilo existente. Se carga después de styles.css / landing.css / profile.css
+   (landing.php y profile/index.php lo enlazan). Usa solo la paleta que ya tiene el sitio, salvo el rojo
+   del círculo "+" que se pidió explícitamente.
+   Secciones: 1) Botón "Seguir" en forma de pastilla  2) Insignia roja "+" sobre el avatar del feed
+              3) Avatar con foto real en el feed       4) Perfil: contador "Seguidos" y lista de cuentas
+   ===================================================================== */
+
+/* ---------- 1. Botón "Seguir" / "Siguiendo" (pastilla) ----------
+   Se usa en la tarjeta del vendedor (PC) y en el perfil público. En el perfil, .btn de profile.css ya aporta
+   forma y tamaño (mismo estilo que "Editar fotos"); acá solo se define el COLOR según el estado. */
+.follow-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: .3rem .95rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: inherit;
+  font-size: .85rem;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color .2s ease, border-color .2s ease, color .2s ease;
+}
+/* Todavía no lo sigo: color primario del sitio */
+.follow-btn[data-following="0"] {
+  background: var(--primary-color, #6366f1);
+  border-color: var(--primary-color, #6366f1);
+  color: #fff;
+}
+.follow-btn[data-following="0"]:hover { background: var(--primary-hover, #4f46e5); border-color: var(--primary-hover, #4f46e5); }
+/* Ya lo sigo: pastilla de cristal tenue (igual que los demás botones secundarios) */
+.follow-btn[data-following="1"] {
+  background: rgba(255, 255, 255, .08);
+  border-color: var(--pk-border, rgba(255, 255, 255, .14));
+  color: var(--text-main, #f8fafc);
+}
+.follow-btn[data-following="1"]:hover { background: rgba(255, 255, 255, .15); border-color: rgba(255, 255, 255, .26); }
+.follow-btn:focus-visible { outline: 2px solid #a5b4fc; outline-offset: 2px; }
+
+/* ---------- 2. Insignia roja "+" sobre el avatar (móvil / tablet) ----------
+   feed.js dibuja: <div class="post-avatar-wrap"> <button class="post-avatar"> … </button> <button class="follow-badge"> </div>
+   El círculo queda centrado en el borde inferior del avatar. Al seguir cambia a ✓ y desaparece. */
+.post-avatar-wrap {
+  position: relative;
+  flex: none;
+  width: 44px;                 /* mismo tamaño que .post-avatar */
+  height: 44px;
+  margin-bottom: 10px;         /* lugar para la mitad de la insignia que sobresale */
+}
+.post-avatar-wrap .post-avatar { width: 100%; height: 100%; }
+
+.follow-badge {
+  position: absolute;
+  left: 50%;
+  bottom: -10px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #fe2c55;         /* rojo del "+" (pedido explícitamente) */
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transform: translateX(-50%);
+  -webkit-tap-highlight-color: transparent;
+}
+.follow-badge::before { content: "+"; }
+.follow-badge.is-check::before { content: "\2713"; font-size: 12px; }   /* ✓ un instante tras seguir */
+/* Área táctil más grande que el círculo visible (20 px es poco para un dedo) */
+.follow-badge::after { content: ""; position: absolute; inset: -8px; }
+/* Ya lo sigo: la insignia se oculta (salvo el instante del ✓) */
+.follow-badge[data-following="1"]:not(.is-check) { display: none; }
+.follow-badge:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* Celular apaisado: el avatar se achica (ver landing.css) y la insignia con él */
+@media (max-height: 480px) and (orientation: landscape) {
+  .post-avatar-wrap { width: 36px; height: 36px; margin-bottom: 8px; }
+  .follow-badge { width: 18px; height: 18px; bottom: -9px; font-size: 13px; }
+}
+
+/* ---------- 3. Avatar con foto real + nombre clickeable ---------- */
+.post-avatar { overflow: hidden; }   /* recorte circular de la foto */
+.post-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;           /* la foto llena el círculo sin deformarse */
+}
+.post-seller[data-action="profile"] { cursor: pointer; }
+.post-seller[data-action="profile"]:hover { text-decoration: underline; }
+
+/* [MERGE] Integración con el panel derecho de PC (≥ 1200px) de la base: es UN solo bloque que feed.js (syncSeller)
+   mantiene al día con el vendedor de la publicación visible. */
+.panel-avatar { overflow: hidden; }
+.avatar-photo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;           /* la foto llena el círculo sin deformarse */
+}
+.panel-follow { flex: none; margin-left: auto; }          /* botón "Seguir" a la derecha del nombre, dentro del panel */
+.panel-follow[hidden] { display: none !important; }
+.panel-follow .follow-btn { padding: .25rem .8rem; font-size: .8rem; }
+.panel-avatar[data-profile], .panel-seller-name[data-profile] { cursor: pointer; }
+.panel-seller-name[data-profile]:hover { text-decoration: underline; }
+
+/* ---------- 4. Perfil: contador "Seguidos" clickeable + lista de cuentas ---------- */
+.profile__stat-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+.profile__stat-link:hover { color: var(--text-main, #f8fafc); text-decoration: underline; }
+.profile__stat-link:focus-visible { outline: 2px solid #a5b4fc; outline-offset: 4px; border-radius: 6px; }
+
+@media (max-width: 420px) {
+  .profile__stats { gap: 10px 18px; }   /* con 4 contadores, que entren mejor en pantallas angostas */
+}
+
+.profile__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+
+.follow-dialog { padding-bottom: 18px; }
+.follow-dialog__status { margin: 4px 0 8px; font-size: .9rem; color: var(--text-muted, #94a3b8); }
+.follow-dialog__status:empty { display: none; }
+.follow-list {
+  max-height: min(50vh, 360px);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.follow-list__item + .follow-list__item { border-top: 1px solid var(--pk-border-soft, rgba(255, 255, 255, .09)); }
+.follow-list__link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 4px;
+  color: var(--text-main, #f8fafc);
+  text-decoration: none;
+}
+.follow-list__link:hover { text-decoration: none; background: rgba(255, 255, 255, .05); }
+.follow-list__avatar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: rgba(99, 102, 241, .3);
+  font-size: .8rem;
+  font-weight: 700;
+  color: #e0e7ff;
+}
+.follow-list__avatar img { width: 100%; height: 100%; object-fit: cover; }
+.follow-list__name { min-width: 0; overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
