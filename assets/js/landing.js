@@ -47,75 +47,18 @@
 
   // (Las flechas ^ y v del feed viven en feed.js, sección "Flechas ^ y v".)
 
- // ---------- Barras de navegación + vistas Home / Perfil ----------
-var profileView = document.getElementById('profileView');   // solo existe con sesión
-var pvGrid  = document.getElementById('pvGrid');
-var pvEmpty = document.getElementById('pvEmpty');
-var pvCount = document.getElementById('pvCount');
-var bottomBtns = document.querySelectorAll('.feed-nav-bottom [data-nav]');
-var feedTop = 0;   // posición del feed antes de entrar al perfil
-
-function pvTile(p) {
-  var a = document.createElement('a');
-  a.className = 'pv-tile';
-  a.href = '/src/controllers/posts/show.php?id=' + encodeURIComponent(p.id);  // provisorio: se cambia en el punto 2
-  a.dataset.postId = p.id;
-  var m = null;
-  if (p.media_url && p.media_type === 'video') {
-    m = document.createElement('video');
-    m.src = p.media_url + '#t=0.1';
-    m.muted = true; m.playsInline = true; m.preload = 'metadata';
-  } else if (p.media_url && p.media_type === 'image') {
-    m = document.createElement('img');
-    m.src = p.media_url; m.alt = ''; m.loading = 'lazy';
-  }
-  if (m) { m.className = 'pv-media'; a.appendChild(m); }
-  var t = document.createElement('span');
-  t.className = 'pv-title';
-  t.textContent = p.title;            // textContent: sin riesgo de XSS
-  a.appendChild(t);
-  return a;
-}
-
-function loadProfile() {
-  fetch(feed.dataset.api, { credentials: 'same-origin' })
-    .then(function (r) { return r.json(); })
-    .then(function (json) {
-      var mine = (json.data || []).filter(function (p) {
-        return String(p.user_id) === profileView.dataset.userId;
-      });
-      pvGrid.textContent = '';
-      mine.forEach(function (p) { pvGrid.appendChild(pvTile(p)); });
-      pvCount.textContent = mine.length;
-      pvEmpty.hidden = mine.length > 0;
-    })
-    .catch(function () { Pilchak.notify('No pudimos cargar tu perfil'); });
-}
-
-function setView(view) {
-  if (view === 'profile' && !profileView) { return; }
-  if (view === 'profile') { feedTop = feed.scrollTop; }
-  document.body.dataset.view = view;                       // el CSS oculta/muestra según este valor
-  if (profileView) { profileView.hidden = (view !== 'profile'); }
-  bottomBtns.forEach(function (b) { b.classList.toggle('is-active', b.dataset.nav === view); });
-  if (view === 'profile') { loadProfile(); }
-  else { feed.scrollTo({ top: feedTop, behavior: 'instant' }); }   // vuelve donde estaba
-}
-
-document.querySelectorAll('[data-nav]').forEach(function (btn) {
-  btn.addEventListener('click', function (ev) {
-    var nav = btn.dataset.nav;
-    if (nav === 'home') {
-      if (document.body.dataset.view === 'profile') { setView('home'); }
-      else { feed.scrollTo({ top: 0, behavior: 'smooth' }); }
-    } else if (nav === 'profile') {
-      ev.preventDefault();                                  // evita ir a la página de perfil vieja
-      setView('profile');
-    } else if (btn.dataset.label) {
-      Pilchak.notify(btn.dataset.label + ': próximamente');
-    }
+  // ---------- Barras de navegación ----------
+  // "publish" (con sesión) lo gestiona publish.js; "+" de invitados y "perfil" son links normales.
+  document.querySelectorAll('[data-nav]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var nav = btn.dataset.nav;
+      if (nav === 'home') {
+        feed.scrollTo({ top: 0, behavior: 'smooth' });   // casita: vuelve al inicio del feed
+      } else if (btn.dataset.label) {
+        Pilchak.notify(btn.dataset.label + ': próximamente');
+      }
+    });
   });
-});
 
   // ---------- Popup para invitados ----------
   var modalEl = document.getElementById('joinModal');   // no existe si hay sesión iniciada

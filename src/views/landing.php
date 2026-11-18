@@ -69,7 +69,7 @@ $demoJson = json_encode($demoPosts, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS 
   <script src="/assets/js/publish.js" defer></script>
   <?php endif; ?>
 </head>
-<body class="landing" data-view="home">
+<body class="landing">
 
   <!-- Iconos SVG: se definen UNA vez y se reutilizan con <use href="#id"> (también desde assets/js/feed.js).
        Los trazos y rellenos se pintan desde landing.css (.feed-icon), por eso los <symbol> no llevan fill/stroke. -->
@@ -168,22 +168,6 @@ $demoJson = json_encode($demoPosts, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS 
 
   <!-- Barra inferior: inicio (casita), publicar (+) y perfil -->
   <nav class="feed-nav feed-nav-bottom" aria-label="Secciones">
-     <?php if ($isAuth): $me = current_user(); ?>
-      <!-- Vista Perfil: se muestra en lugar del feed (data-view="profile"). La grilla la llena landing.js -->
-      <section id="profileView" class="profile-view" hidden aria-label="Mi perfil" data-user-id="<?= e($me['id']) ?>">
-         <header class="pv-head">
-       <div class="pv-avatar" aria-hidden="true"><?= e(function_exists('mb_substr') ? mb_strtoupper(mb_substr($me['name'], 0, 2, 'UTF-8'), 'UTF-8') : strtoupper(substr($me['name'], 0, 2))) ?></div>
-        <h1 class="pv-name">@<?= e($me['name']) ?></h1>
-        <p class="pv-count"><strong id="pvCount">0</strong> publicaciones</p>
-       <form method="post" action="/src/controllers/auth/logout.php" class="m-0">
-        <?= csrf_field() ?>
-          <button type="submit" class="pv-btn">Cerrar sesión</button>
-        </form>
-      </header>
-      <div class="pv-grid" id="pvGrid"></div>
-      <p class="pv-empty" id="pvEmpty" hidden>Todavía no publicaste nada.</p>
-    </section>
-    <?php endif; ?>
     <button type="button" class="feed-nav-btn is-active" data-nav="home" aria-label="Inicio">
       <svg class="feed-icon" aria-hidden="true"><use href="#i-home"/></svg>
     </button>
@@ -198,7 +182,7 @@ $demoJson = json_encode($demoPosts, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS 
       </a>
     <?php endif; ?>
     <?php if ($isAuth): ?>
-      <a class="feed-nav-btn" href="/src/views/profile/index.php" data-nav="profile" aria-label="Mi perfil">
+      <a class="feed-nav-btn" href="/src/views/profile/index.php" aria-label="Mi perfil">
         <svg class="feed-icon" aria-hidden="true"><use href="#i-user"/></svg>
       </a>
     <?php else: ?>
