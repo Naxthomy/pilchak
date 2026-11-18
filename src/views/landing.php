@@ -193,12 +193,6 @@ $demoJson = json_encode($demoPosts, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS 
     <?php endif; ?>
   </nav>
 
-  </div><!-- /.app-frame -->
-  <!-- [AJUSTE 3] Cierre que faltaba: .app-frame (abierto arriba) se cerraba recién al final del archivo, y el comentario
-       "/.phone" cerraba en realidad a .app-frame. Resultado: la columna de acciones/flechas y las dos columnas laterales
-       quedaban DENTRO de .phone / .stage y el layout se rompía. Con este cierre cada bloque vuelve a su lugar. -->
-  </div><!-- /.phone -->
-
   <!-- ===== BUSCADOR POR TÍTULO (nuevo) =====
        Oculto hasta tocar la lupa de arriba (data-nav="search"). Lo gestiona assets/js/feed.js (sección "Buscador por título"). -->
        <div class="feed-search" id="feedSearch" role="search" hidden>
@@ -210,6 +204,12 @@ $demoJson = json_encode($demoPosts, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS 
       </button>
     </div>
   </div>
+
+  </div><!-- /.app-frame -->
+  <!-- [AJUSTE 3] Cierre que faltaba: .app-frame (abierto arriba) se cerraba recién al final del archivo, y el comentario
+       "/.phone" cerraba en realidad a .app-frame. Resultado: la columna de acciones/flechas y las dos columnas laterales
+       quedaban DENTRO de .phone / .stage y el layout se rompía. Con este cierre cada bloque vuelve a su lugar. -->
+  </div><!-- /.phone -->
 
   <!-- ===== COLUMNA DE ACCIONES + FLECHAS (escritorio y tablet) =====
        Vive AFUERA del celular, a su derecha, para que la foto/video ocupe todo el marco y el marco quede centrado.

@@ -356,7 +356,7 @@
   right: 0;
   top: calc(64px + env(safe-area-inset-top, 0px));
   z-index: 11;
-  padding: 0 14px;
+  padding: 0 24px;                /* un poco más angosta que el feed (antes 14px) */
   pointer-events: none;            /* solo la caja recibe toques: no bloquea el scroll del feed */
 }
 .feed-search[hidden] { display: none; }
